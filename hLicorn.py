@@ -21,18 +21,15 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
     
     # reation of the list of row names of discreteExpression
     if discreteExpression!=None:
-        # tranformation of discreteExpression in df
-        dis_exp_df = pd.DataFrame(discreteExpression)
-        
         # access to names of the rows of discreteExpression to get a list
-        dis_row_names = dis_exp_df.iloc[:, 0].tolist()
+        dis_row_names = discreteExpression.index.tolist()
 
     # determination of GeneList
     if GeneList==None:
         # access to names of the rows of numericalExpression to get a list
-        num_row_names = numericalExpression.iloc[:, 0].tolist()
+        num_row_names = numericalExpression.index.tolist()
         # get genes list witch are not in Tflist
-        GeneList=num_row_names.difference(Tflist)
+        GeneList = list(set(num_row_names) - set(Tflist))
     
     # determination of maxCoreg
     if maxCoreg==None:
@@ -45,7 +42,7 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
         if(  sum(! unique(discreteExpression) %in% -1:1) > 0  ){
             stop("Discrete expression data should only have values in {-1, 0, 1}")}
     '''
-    if  any(value not in [-1,0,1] for value in discreteExpression.unique()):
+    if  any(value not in [-1,0,1] for value in discreteExpression.stack().unique()):
         raise ValueError("Discrete expression data should only have values in {-1, 0, 1}")
 
     '''    
@@ -63,6 +60,8 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
     '''
     if numericalExpression.shape[0] != discreteExpression.shape[0] | len(num_row_names) > len(dis_row_names):
         raise ValueError("Discrete expression and continuous expression should have the same dimensions and the same rownames (gene/tf names)")
+
+    ''' /!\STOP VERIFICATION : la condition est vraie avec les éléments que j'ai ...'''
 
     '''
     if(length(intersect(TFlist,rownames(numericalExpression)))<=1 ){
@@ -105,32 +104,34 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
     ''' 
     genesupport = which(apply(abs(discreteExpression), 1 , sum) > (ncol(numericalExpression)*(minGeneSupport)))
     '''
-    indices_genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > np.shape(numericalExpression)[1] * minGeneSupport)[0]
+    genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > np.shape(numericalExpression)[1] * minGeneSupport)[0]
     
     # to be consistent with R indexing starting at 1
     '''
     discreteExpression=discreteExpression[genesupport,]
     '''
-    genes_support = indices_genes_support + 1  
-    discreteExpression=discreteExpression[genes_support,:]
+    #genes_support = genes_support + 1  
+    discreteExpression=discreteExpression.iloc[genes_support]
 
     '''
     numericalExpression=numericalExpression[genesupport,]
     '''
-    numericalExpression=numericalExpression[genes_support,:]
+    numericalExpression=numericalExpression.iloc[genes_support]
 
     '''
     TFlist = intersect(rownames(numericalExpression),TFlist)
     '''
-    TFlist = set(num_row_names).intersection(Tflist)
+    TFlist = list(set(num_row_names).intersection(Tflist))
 
     '''
     GeneList= intersect(rownames(numericalExpression),GeneList)
     '''
-    GeneList= set(num_row_names).intersection(GeneList)
+    GeneList= list(set(num_row_names).intersection(GeneList))
 
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION AFTER THE SELECTION OF THE GENES AND TF
+
+    ''' /!\STOP VERIFICATION : la condition est vraie avec les éléments que j'ai ...'''
     '''    
     if(length(TFlist)<5){
         stop("Less than 5 of the provided TF are suitable to infer a network. Either provide more TF, more variations in the discrete dataset (more 1 or -1) or decrease the minGeneSupport parameter to select more but less variant TFs.")
@@ -162,20 +163,20 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
     }
     '''
     if len(GeneList)==1:
-        geneNumExp = np.matrix(numericalExpression[GeneList, :]).T
-        geneDiscExp= np.matrix(discreteExpression[GeneList, :]).T
-        geneNumExp.iloc[:, 0]=GeneList
-        geneDiscExp.iloc[:, 0]=GeneList
+        geneNumExp = numericalExpression.loc[GeneList]
+        geneDiscExp= discreteExpression.loc[GeneList]
+        geneNumExp.index=GeneList
+        geneDiscExp.index=GeneList
     else:
-        geneNumExp= numericalExpression[GeneList, :]
-        geneDiscExp= discreteExpression[GeneList, :]
+        geneNumExp= numericalExpression.loc[GeneList]
+        geneDiscExp= discreteExpression.loc[GeneList]
     
     '''
     regNumExp= numericalExpression[TFlist,]
     regDiscExp= discreteExpression[TFlist,]
     '''
-    regNumExp= numericalExpression[TFlist, :]
-    regDiscExp= discreteExpression[TFlist, :]
+    regNumExp= numericalExpression.loc[TFlist]
+    regDiscExp= discreteExpression.loc[TFlist]
     
     ##    ##    ##    ##    ##    ##    ##    ##    ##
     ## TRANSFORMING ALL DISCRETE DATA INTO TRANSACTIONs
@@ -186,7 +187,9 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
     negSamples= (ncol(discreteExpression) +1):(ncol(discreteExpression) *2)
     regBitData =cbind(regDiscExp==+1 , regDiscExp== -1)
     transRegBitData= as(t(regBitData),"transactions")
-    
+    '''
+    '''                                                 /!\ PAUSE DANS LES VERIFICATIONS LE 12 04 2024 '''
+    '''
     if(verbose){
         message("Mining coregulator ...")
     }
@@ -429,11 +432,8 @@ discretizeExpressionData = function(numericalExpression,threshold=NULL,refSample
 '''
 def discretizeExpressionData(numericalExpression,threshold=None,refSamples=None,standardDeviationThreshold=1):
     '''  
-    numericalExpression=as.matrix(numericalExpression)
-    '''
-    numericalExpression = numericalExpression.values  
-  
-    '''
+    numericalExpression=as.matrix(numericalExpression) --> pas besoin de le transcrire en python
+    
     if(!is.null(refSamples) ){
         refmeans = apply(numericalExpression[,refSamples],1,mean)
         centered  =t(scale(t(numericalExpression[,setdiff(colnames(numericalExpression),refSamples)]),scale=FALSE,center=refmeans))  
@@ -469,21 +469,21 @@ def discretizeExpressionData(numericalExpression,threshold=None,refSamples=None,
         # finale transposition
         centered = centered_data.T
 
-        centered.iloc[:, 0] = numericalExpression.iloc[:, 0]
+        centered.index = numericalExpression.index
 
         #colnames(centered) = setdiff(colnames(numericalExpression),refSamples)
         columns_to_exclude = set(refSamples)
         columns_to_use = reduce(lambda left, right: left.difference(right), [numericalExpression.columns, columns_to_exclude])
         centered.columns = columns_to_use
 
-    elif min(numericalExpression) >= 0: #  means that it's raw (log or not) data
+    elif np.min(numericalExpression) >= 0: #  means that it's raw (log or not) data
         #centered  =t(scale(t(numericalExpression),scale=FALSE))
-        centered = numericalExpression.sub(numericalExpression.mean(axis=1), axis=0).T
-        centered.iloc[:, 0] = numericalExpression.iloc[:, 0]
+        centered = numericalExpression.sub(numericalExpression.mean(axis=1), axis=0)
+        centered.index = numericalExpression.index
         centered.columns = numericalExpression.columns
         
     else:
-        centered=numericalExpression.fillna(0, inplace=True)
+        centered[pd.isna(numericalExpression)] = 0
 
     '''
     if(is.null(threshold)){
@@ -577,14 +577,14 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     coactnames = coact_pasted.unique()
 
     coact=coactnames.split()
-    coact[coactnames.index("")]=""
+    coact[coactnames.iloc[g, :]==("")]=""
 
     corep_sorted = corep.apply(sorted, axis=1)
     corep_pasted = corep_sorted.apply(lambda x: ' '.join(map(str, x)))
     corepnames = corep_pasted.unique()
 
     corep=corepnames.split()
-    corep[corepnames.index("")]=""
+    corep[corepnames.iloc[g, :]==("")]=""
 
     '''   
     coactexp = eand(coact,regDiscExp)
@@ -700,6 +700,10 @@ def eand(coact,regDiscExp,multip=1):
 
 '''         MAIN            '''
 numericalExpression = pd.read_csv('CIT.csv')
+
+# rownames as index to exit str in the dataframe
+numericalExpression.set_index(numericalExpression.columns[0], inplace=True)
+
 try:
     hLICORN()
 except ValueError as e:
