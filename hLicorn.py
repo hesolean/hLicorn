@@ -33,7 +33,7 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
     
     # determination of maxCoreg
     if maxCoreg==None:
-        maxCoreg=len(TFlist)
+        maxCoreg=len(Tflist)
     
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION BEFORE STARTING
@@ -320,10 +320,36 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
             car elles peuvent être parallélisées sur plusieurs cœurs de CPU.
             '''
             
+            '''
+            Version avec joblib
+            
+            import multiprocessing
+            
+            processes = [] # facultatif, uniquement pour récupérer la liste des processus qui se sont exécutés
+            for _ in GeneList:
+                p = multiprocessing.Process(target=process_gene,args=[GeneList])
+                p.start()
+                processes.append(p)
+            
+            for process in processes:
+                process.join() # pour forcer le programme à attendre que tous les process soient fini avec de continuer
+                
+            peu importe le nombre de coeurs disponibles, les taches seront distribuées en fonction des ressources disponibles.
+            '''
+            
             # create a pool with the number of processus wanted
             with ProcessPoolExecutor() as executor:
                 # the results are in the list "results"
                 results = list(executor.map(process_gene, GeneList))
+                # je ne suis pas sûre de devoir laisser list() quand on utilise map(). map() garde une liste en mémoire contrairement à imap et imap_unordered
+                
+            '''
+            variante : results = [executor.submit(process_gene(gene)) for gene in GeneList]
+            à privilégier par rapport à multiprocessing ?!
+            mais il vaut mieux utiliser map qu'une boucle pour que les process s'exécutent dans l'ordre de la liste
+            '''
+            
+            
             '''             /!\ QUESTION ????
             version avec les Threads :
 
@@ -331,6 +357,17 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
 
             with ThreadPoolExecutor() as executor:
                 results = list(executor.map(process_gene, GeneList))
+            
+            Il faut tester les méthodes ProcessPoolExecutor et ThreadPoolExecutor car dans certains cas, l'une est plus rapide que l'autre
+            '''
+            
+            '''
+            Version avec joblib :
+                
+            from joblib import Parallel, delayed, parallel_config
+
+            with parallel_config(backend="loky", inner_max_num_threads=2):
+                results = Parallel(n_jobs=using_processus)(delayed(process_gene)(gene) for gene in GeneList)
             '''
             gotNet=True
 
@@ -342,6 +379,10 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
             Pool() crée un pool de processus avec un nombre de processus par défaut (nombre de cœurs du CPU).
             pool.apply_async est utilisé pour exécuter de manière asynchrone la fonction process_gene pour chaque élément de GeneList.
             res.get() est utilisé pour obtenir les résultats de chaque tâche asynchrone.
+            
+                        /!\ MULTIPROCESSING.POOL
+            à utiliser avec une protection du main
+            if __name__ == '__main__':
             '''
             gotNet=True
 
@@ -390,7 +431,7 @@ def hLICORN(numericalExpression,Tflist,discreteExpression=None,GeneList=None,par
             
             a-t-on une colonne Target dans le dataframe results ????'''
         else:
-            gotNet=FALSE
+            gotNet=False
         
         if verbose:
             print("got"+str(results.shape[0])+"grn")
