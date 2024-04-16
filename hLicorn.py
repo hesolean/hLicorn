@@ -7,6 +7,7 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from sklearn.preprocessing import StandardScaler
 from functools import reduce
+import combnLicorn
 
 '''
 hLICORN=function( numericalExpression,discreteExpression=discretizeExpressionData(numericalExpression)
@@ -651,6 +652,18 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     as.integer(rep(-1,(length(coact))*(length(corep))))# vector to store index of corepressor
     )
     '''
+    
+    x = combnLicorn.combnLicorn(
+        int * coactexp, 
+        int * ncoacts, 
+        int * corepexp , 
+        int * ncoreps, 
+        int * gexp, 
+        int * nsamples,  
+        double * result , 
+        int * iact,
+        int * irep)
+    
     # bad index will store all bad comparisons (could be done before computing .. right?)
     # then, no intersection between act and rep (includes both empty
 
@@ -745,7 +758,9 @@ numericalExpression = pd.read_csv('CIT.csv')
 # rownames as index to exit str in the dataframe
 numericalExpression.set_index(numericalExpression.columns[0], inplace=True)
 
+Tflist = pd.read_csv('HumanTF.csv')
+
 try:
-    hLICORN()
+    hLICORN(numericalExpression,Tflist)
 except ValueError as e:
     print(e)
