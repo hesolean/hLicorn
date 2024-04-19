@@ -20,6 +20,9 @@ searchThresh=1/3,nGRN=100,verbose=FALSE)
 def hLICORN(numericalExpression,Tflist,
             discreteExpression=None,GeneList=None,parallel="no",cluster=None,
             minGeneSupport=0.1,minCoregSupport = 0.1,maxCoreg=None,searchThresh=1/3,nGRN=100,verbose=False):
+    # list of Tf
+    tf_list = Tflist.iloc[:, 1].tolist()
+
     # determination of discrete values
     if discreteExpression==None:
         discreteExpression=discretizeExpressionData(numericalExpression)
@@ -37,11 +40,11 @@ def hLICORN(numericalExpression,Tflist,
         # access to names of the rows of numericalExpression to get a list
         num_row_names = numericalExpression.index.tolist()
         # get genes list witch are not in Tflist
-        GeneList = list(set(num_row_names) - set(Tflist))
+        GeneList = list(set(num_row_names) - set(tf_list))
     
     # determination of maxCoreg
     if maxCoreg==None:
-        maxCoreg=len(Tflist)
+        maxCoreg=len(tf_list)
     
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION BEFORE STARTING
@@ -66,7 +69,7 @@ def hLICORN(numericalExpression,Tflist,
     sum(rownames(discreteExpression) != rownames(numericalExpression))>0 ){
         stop("Discrete expression and continuous expression should have the same dimensions and the same rownames (gene/tf names)") }
     '''
-    # on prend la copie
+    # copy of the 2 lists to evaluate the condition without modify the original lists
     num_row_names_sort = num_row_names.copy()
     dis_row_names_sort = dis_row_names.copy()
     if numericalExpression.shape[0] != discreteExpression.shape[0] | num_row_names_sort.sort() != dis_row_names_sort.sort():
@@ -76,7 +79,7 @@ def hLICORN(numericalExpression,Tflist,
     if(length(intersect(TFlist,rownames(numericalExpression)))<=1 ){
         stop("At least 2 of the provided regulators/transcription factor (TFlist) should be in the rownames in the gene expression matrix")    }
     '''
-    if len(set(num_row_names).intersection(set(Tflist)))<=1:
+    if len(set(num_row_names).intersection(set(tf_list)))<=1:
         raise ValueError("At least 2 of the provided regulators/transcription factor (TFlist) should be in the rownames in the gene expression matrix")
 
     '''
@@ -105,7 +108,7 @@ def hLICORN(numericalExpression,Tflist,
     ''' 
     genesupport = which(apply(abs(discreteExpression), 1 , sum) > (ncol(numericalExpression)*(minGeneSupport)))
     '''
-    genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > np.shape(numericalExpression)[1] * minGeneSupport)[0]
+    genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > (np.shape(numericalExpression)[1] * minGeneSupport)[0])
     
     # to be consistent with R indexing starting at 1
     '''
@@ -122,7 +125,7 @@ def hLICORN(numericalExpression,Tflist,
     '''
     TFlist = intersect(rownames(numericalExpression),TFlist)
     '''
-    TFlist = list(set(num_row_names).intersection(Tflist))
+    tf_list = list(set(num_row_names).intersection(tf_list))
 
     '''
     GeneList= intersect(rownames(numericalExpression),GeneList)
@@ -132,13 +135,12 @@ def hLICORN(numericalExpression,Tflist,
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION AFTER THE SELECTION OF THE GENES AND TF
 
-    ''' /!\STOP VERIFICATION : TRUE with the files of values I get ...'''
     '''    
     if(length(TFlist)<5){
         stop("Less than 5 of the provided TF are suitable to infer a network. Either provide more TF, more variations in the discrete dataset (more 1 or -1) or decrease the minGeneSupport parameter to select more but less variant TFs.")
     }
     '''
-    if len(TFlist)<5:
+    if len(tf_list)<5:
         raise ValueError("Less than 5 of the provided TF are suitable to infer a network. Either provide more TF, more variations in the discrete dataset (more 1 or -1) or decrease the minGeneSupport parameter to select more but less variant TFs.")
 
     '''
@@ -163,21 +165,15 @@ def hLICORN(numericalExpression,Tflist,
         geneDiscExp= discreteExpression[GeneList,]
     }
     '''
-    if len(GeneList)==1:
-        geneNumExp = numericalExpression.loc[GeneList]
-        geneDiscExp= discreteExpression.loc[GeneList]
-        geneNumExp.index=GeneList
-        geneDiscExp.index=GeneList
-    else: # is it necessary in python ?
-        geneNumExp= numericalExpression.loc[GeneList]
-        geneDiscExp= discreteExpression.loc[GeneList]
+    geneNumExp = numericalExpression.loc[GeneList]
+    geneDiscExp= discreteExpression.loc[GeneList]
     
     '''
     regNumExp= numericalExpression[TFlist,]
     regDiscExp= discreteExpression[TFlist,]
     '''
-    regNumExp= numericalExpression.loc[TFlist]
-    regDiscExp= discreteExpression.loc[TFlist]
+    regNumExp= numericalExpression.loc[tf_list]
+    regDiscExp= discreteExpression.loc[tf_list]
     
     ##    ##    ##    ##    ##    ##    ##    ##    ##
     ## TRANSFORMING ALL DISCRETE DATA INTO TRANSACTIONS
@@ -200,6 +196,8 @@ def hLICORN(numericalExpression,Tflist,
     negSamples= range(discreteExpression.shape[1]+1,discreteExpression.shape[1] *2) # non utilisé
 
     regBitData =np.column_stack((regDiscExp == +1, regDiscExp == -1))
+    # on garde les 1 et -1 mais tous mis à 1 car les itemsfrequent ne prennent pas les -1. C'est un choix par rapport à calculer les 2 séparéments
+
 
     transRegBitData= regBitData.T
 
@@ -212,11 +210,11 @@ def hLICORN(numericalExpression,Tflist,
     '''
     miningFunction=apriori
     transitemfreq =suppressWarnings(miningFunction(transRegBitData,parameter=list(support = minGeneSupport/2,maxlen=1,target="frequent itemsets")
-    ,control=list(verbose=FALSE)))
+    ,control=list(verbose=FALSE))) -> on ne cherche que les singletons
     if(maxCoreg > 1){
         transitemfreq=c(transitemfreq,suppressWarnings(miningFunction(transRegBitData,parameter=list(support =minCoregSupport/2,minlen=2,maxlen=maxCoreg,target="closed frequent itemsets")
         ,control=list(verbose=FALSE))))
-    }
+    } -> on ne cherche les "close" que dans un cas particulier
     coregs =as(slot(transitemfreq,"items"),"list")
     '''
     te = TransactionEncoder()
@@ -232,13 +230,16 @@ def hLICORN(numericalExpression,Tflist,
             result=apriori(transRegBitData_df, min_support=minCoregSupport/2, use_colnames=True, max_len=maxCoreg, verbose=0, low_memory=False)
             transitemfreq.extend(result)
 
-        coregs = transitemfreq['itemsets'].tolist()
+        # pour ne pas avoir de doublons dans les singletons
+        coregs = set(transitemfreq['itemsets'].tolist())
 
     '''             /!\ QUESTION ????
     transitemfreq=c(transitemfreq,suppressWarnings(miningFunction(transRegBitData,parameter=list(support =minCoregSupport/2,minlen=2,maxlen=maxCoreg,target="closed frequent itemsets")
             ,control=list(verbose=FALSE))))
     J'ai un soucis avec le "closed frequent itemset" car normalement dans ce cas, il faut que maxlen soit à 0 ??
     minlen n'est pas un paramètre de apriori donc il faut le passer autrement ?
+
+
     '''
 
 
@@ -255,7 +256,7 @@ def hLICORN(numericalExpression,Tflist,
     }'''
     if verbose:
         print("Learning a Co-Regulatory network for:\n"+str(len(GeneList))
-              +" target genes, "+str(len(TFlist))
+              +" target genes, "+str(len(tf_list))
               +" regulators and a total of coregulator sets "+str(len(coregs))
               +" sets of potential co-regulators.\nSearch parameters :\n"+"Maximum size of co-regulator sets : "+str(maxCoreg)
               +"\nNumber of putative GRN per gene : "+str(nGRN)+"\nMinimum number of differentially expressed samples to select a single gene : "+str(minGeneSupport)+
@@ -268,7 +269,7 @@ def hLICORN(numericalExpression,Tflist,
     gotNet=FALSE
     '''
     result=np.dataframe()
-    gotNet=False
+    gotNet=False # on commence à un threathold élevé. Si on a pas de résultat, on réduit. C'est le gotNet qui dit si on continue ou non
 
     #just because it's easier toadd here 5% and remove it at the first line in the while loop, where it needs to be decrementale in case no GRNs are found
     '''searchThresh=  1/((1/searchThresh)-1)'''
@@ -281,23 +282,23 @@ def hLICORN(numericalExpression,Tflist,
     while(searchThresh >= 0.05 & !gotNet )
     {
         searchThresh =  1/((1/searchThresh)+1)
-        if(parallel =="multicore" & length(GeneList)>1 & getOption("mc.cores", 2L) > 1)
+        if(parallel =="multicore" & length(GeneList)>1 & getOption("mc.cores", 2L) > 1) -> joblib
         {
             result =mclapply(GeneList,oneGeneHLICORN,geneDiscExp=geneDiscExp,regDiscExp=regDiscExp,
             coregs=coregs,transitemfreq=transitemfreq,transRegBitData=transRegBitData,searchThresh=searchThresh,
             genexp=geneNumExp,regnexp=regNumExp,nresult=nGRN)
-            gotNet=TRUE
-        }else if(parallel =="snow" & !is.null(cluster) & length(GeneList)>1){
+            gotNet=TRUE -> a voir pour l'incorporer dans le oneGeneHLicorn
+        }else if(parallel =="snow" & !is.null(cluster) & length(GeneList)>1){ -> spark
             result =parLapply(cluster,GeneList,oneGeneHLICORN,geneDiscExp=geneDiscExp,regDiscExp=regDiscExp,
             coregs=coregs,transitemfreq=transitemfreq,transRegBitData=transRegBitData,searchThresh=searchThresh,
             genexp=geneNumExp,regnexp=regNumExp,nresult=nGRN)
             gotNet=TRUE
-        }else if( length(GeneList)>1){
+        }else if( length(GeneList)>1){ -> sequentiel
             result =lapply(GeneList,oneGeneHLICORN,geneDiscExp=geneDiscExp,regDiscExp=regDiscExp,
             coregs=coregs,transitemfreq=transitemfreq,transRegBitData=transRegBitData,searchThresh=searchThresh,
             genexp=geneNumExp,regnexp=regNumExp,nresult=nGRN)
             gotNet=TRUE
-        }else{
+        }else{  -> sequentiel
             result=oneGeneHLICORN(GeneList,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData,searchThresh ,
             genexp=geneNumExp,regnexp=regNumExp,nresult=nGRN)
             gotNet=TRUE
