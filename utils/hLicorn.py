@@ -22,16 +22,20 @@ def hLICORN(numericalExpression,Tflist,
             minGeneSupport=0.1,minCoregSupport = 0.1,maxCoreg=None,searchThresh=1/3,nGRN=100,verbose=False):
     # list of Tf
     tf_list = Tflist.iloc[:, 1].tolist()
+    print(f"ft_list de taille ", len(tf_list))
 
     # determination of discrete values
     if discreteExpression==None:
         discreteExpression=discretizeExpressionData(numericalExpression)
-    
+    print(f"discreteExpression : {discreteExpression} de taille ", discreteExpression.shape)
+    # seems to get only ones
+
     # list of row names of discreteExpression
     dis_row_names = None
     if not discreteExpression.empty:
         # access to names of the rows of discreteExpression to get a list
         dis_row_names = discreteExpression.index.tolist()
+    print(f"dis_row_names de taille ", len(dis_row_names))
 
     # determination of GeneList
     num_row_names = None
@@ -41,11 +45,13 @@ def hLICORN(numericalExpression,Tflist,
         num_row_names = numericalExpression.index.tolist()
         # get genes list witch are not in Tflist
         GeneList = list(set(num_row_names) - set(tf_list))
-    
+    print(f"GeneList de taille ", len(GeneList))
+
     # determination of maxCoreg
     if maxCoreg==None:
         maxCoreg=len(tf_list)
-    
+    print(f"maxCoreg : {maxCoreg}")
+
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION BEFORE STARTING
 
@@ -108,29 +114,34 @@ def hLICORN(numericalExpression,Tflist,
     ''' 
     genesupport = which(apply(abs(discreteExpression), 1 , sum) > (ncol(numericalExpression)*(minGeneSupport)))
     '''
+    # get a tupple
     genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > (np.shape(numericalExpression)[1] * minGeneSupport))
-    
+    print(f"genes_support de taille ", genes_support[0].shape)
+
     # to be consistent with R indexing starting at 1
     '''
     discreteExpression=discreteExpression[genesupport,]
     '''
-    #genes_support = genes_support + 1  
-    discreteExpression=discreteExpression.iloc[genes_support]
+    discreteExpression=discreteExpression.iloc[genes_support] # get matrix with ones
+    print(f"selected discreteExpression de taille ", discreteExpression.shape)
 
     '''
     numericalExpression=numericalExpression[genesupport,]
     '''
-    numericalExpression=numericalExpression.iloc[genes_support]
+    numericalExpression=numericalExpression.iloc[genes_support] # get numerical expression
+    print(f"selected numericalExpression de taille ", numericalExpression.shape)
 
     '''
     TFlist = intersect(rownames(numericalExpression),TFlist)
     '''
-    tf_list = list(set(num_row_names).intersection(tf_list))
+    tf_list = list(set(num_row_names).intersection(tf_list)) # get a list
+    print(f"selected tf_list de taille ", len(tf_list))
 
     '''
     GeneList= intersect(rownames(numericalExpression),GeneList)
     '''
-    GeneList= list(set(num_row_names).intersection(GeneList))
+    GeneList= list(set(num_row_names).intersection(GeneList)) # get a list
+    print(f"selected GeneList de taille ", len(GeneList))
 
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION AFTER THE SELECTION OF THE GENES AND TF
@@ -165,16 +176,18 @@ def hLICORN(numericalExpression,Tflist,
         geneDiscExp= discreteExpression[GeneList,]
     }
     '''
-    geneNumExp = numericalExpression.loc[GeneList]
-    geneDiscExp= discreteExpression.loc[GeneList]
-    
+    geneNumExp = numericalExpression.loc[GeneList] # get a dataframe
+    geneDiscExp= discreteExpression.loc[GeneList] # get a dataframe with ones
+    print("geneNumExp de taille ", geneNumExp.shape, " et geneDiscExp de taille ", geneDiscExp.shape)
+
     '''
     regNumExp= numericalExpression[TFlist,]
     regDiscExp= discreteExpression[TFlist,]
     '''
-    regNumExp= numericalExpression.loc[tf_list]
-    regDiscExp= discreteExpression.loc[tf_list]
-    
+    regNumExp= numericalExpression.loc[tf_list] # get a dtatframe
+    regDiscExp= discreteExpression.loc[tf_list] # get a dataframe with ones
+    print("regNumExp de taille ", regNumExp.shape, " et regDiscExp de taille ", regDiscExp.shape)
+
     ##    ##    ##    ##    ##    ##    ##    ##    ##
     ## TRANSFORMING ALL DISCRETE DATA INTO TRANSACTIONS
     # To run apriori, the discrete data must be binary. So, the discrete data is simply becoming two concatenated binary matrix
@@ -198,7 +211,8 @@ def hLICORN(numericalExpression,Tflist,
     # on garde les 1 et -1 mais tous mis à 1 car les itemsfrequent ne prennent pas les -1. C'est un choix par rapport à calculer les 2 séparéments
 
 
-    transRegBitData= regBitData.T
+    transRegBitData= regBitData.T # get a array with true then false
+    print(f"transRegBitData : {transRegBitData}")
 
     if verbose:
         print("Mining coregulator ...")
@@ -230,6 +244,9 @@ def hLICORN(numericalExpression,Tflist,
             transitemfreq = pd.concat([transitemfreq, result])
         # pour ne pas avoir de doublons dans les singletons
         coregs = set(transitemfreq['itemsets'].tolist())
+
+    print(f"transitemfreq : {transitemfreq} de taille ", transitemfreq.shape)
+    print(f"coregs : {coregs} de taille ", len(coregs))
 
     '''
     transitemfreq=c(transitemfreq,suppressWarnings(miningFunction(transRegBitData,parameter=list(support =minCoregSupport/2,minlen=2,maxlen=maxCoreg,target="closed frequent itemsets")
@@ -270,7 +287,7 @@ def hLICORN(numericalExpression,Tflist,
     #just because it's easier toadd here 5% and remove it at the first line in the while loop, where it needs to be decrementale in case no GRNs are found
     '''searchThresh=  1/((1/searchThresh)-1)'''
     searchThresh=  1/((1/searchThresh)-1)
-    
+    print(f"searchThresh : {searchThresh}")
     # In very large datasets of very heterogeneous samples (such as the large collection of unrelated cell lines ...)
     # It is possible that no GRN can be fitted with stringent threshold (usually 50%) and that no GRN is found.
     # In case this happens, the threshold is decremented step by step and if no network is found at 10%, then none can be found ...
@@ -300,20 +317,25 @@ def hLICORN(numericalExpression,Tflist,
             gotNet=TRUE
         }
     }'''
-    while searchThresh >= 0.05 and gotNet==True :
+    while searchThresh >= 0.05 and gotNet==False :
+        print("Boucle while") # on n'entre pas dans le while
         # decrements the search threshold in case nothing is found
         #(can be the case for VERY large datasets for which it can be hard to find regulators with 50% of matching +1 and -1)
         searchThresh =  1/((1/searchThresh)+1)
+        print(f"searchThresh : {searchThresh}")
         #running hlicorn for each gene in a multithread way if needed.
         
         # get available cares on the machine and define how much to use
         available_cores_nb = multiprocessing.cpu_count()
         using_processus = max(1, available_cores_nb - 1)
+        print(f"using_processus : {using_processus}")
 
         def process_gene(gene):
+            print("process_gene")
             return oneGeneHLICORN(gene, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, genexp=geneNumExp, regnexp=regNumExp, nresult=nGRN)
 
-        if parallel =="multicore" & len(GeneList)>1 & using_processus > 1:
+        if parallel =="multicore" and len(GeneList)>1 & using_processus > 1:
+            print("multicore")
             '''
             ProcessPoolExecutor est un composant de la bibliothèque standard de Python qui permet d'exécuter des fonctions de manière asynchrone dans des processus parallèles.
             Il crée un pool de processus dans lequel les fonctions peuvent être exécutées de manière concurrente.
@@ -345,7 +367,7 @@ def hLICORN(numericalExpression,Tflist,
                 # the results are in the list "results"
                 results = list(executor.map(process_gene, GeneList))
                 # je ne suis pas sûre de devoir laisser list() quand on utilise map(). map() garde une liste en mémoire contrairement à imap et imap_unordered
-                
+                print(f"result : {results}")
             '''
             variante : results = [executor.submit(process_gene(gene)) for gene in GeneList]
             à privilégier par rapport à multiprocessing ?!
@@ -374,10 +396,13 @@ def hLICORN(numericalExpression,Tflist,
             '''
             gotNet=True
 
-        elif parallel =="snow" & cluster!=None & len(GeneList)>1:
+        elif parallel =="snow" and cluster!=None & len(GeneList)>1:
+            print("snow")
             with multiprocessing.Pool() as pool:
                 results = [pool.apply_async(process_gene, (gene,)) for gene in GeneList]
                 results = [res.get() for res in results]
+                print(f"result : {results}")
+
             '''
             Pool() crée un pool de processus avec un nombre de processus par défaut (nombre de cœurs du CPU).
             pool.apply_async est utilisé pour exécuter de manière asynchrone la fonction process_gene pour chaque élément de GeneList.
@@ -390,14 +415,18 @@ def hLICORN(numericalExpression,Tflist,
             gotNet=True
 
         elif len(GeneList)>1:
+            print("elif")
             # comprehension of the list to apply prosses_gene to each gene of the list
             results = [process_gene(gene) for gene in GeneList]
-                        
+            print(f"result : {results}")
+            
             gotNet=True
 
         else:
-            result=oneGeneHLICORN(GeneList,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData,searchThresh,
+            print("else")
+            results=oneGeneHLICORN(GeneList,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData,searchThresh,
             genexp=geneNumExp,regnexp=regNumExp,nresult=nGRN)
+            print(f"result : {results}")
 
             gotNet=True
 
@@ -426,7 +455,7 @@ def hLICORN(numericalExpression,Tflist,
             results = pd.DataFrame(results)
 
         #if LICORN actually did find some networks ... (meaning at least one GRN)
-        if results.shape[1] >= 3 & results.shape[0] >0:
+        if results.shape[1] >= 3 and results.shape[0] >0:
             # Maybe LICORN did find somes nets, but not enough .. (for less then 5% of the genes)
             '''
             if(length(unique(result$Target)) < (0.05*length(GeneList))):
@@ -457,10 +486,10 @@ def hLICORN(numericalExpression,Tflist,
     sigrns = coregnet(result)
     sigrns@inferenceParameters=list(minGeneSupport=minGeneSupport,maxCoreg=maxCoreg,minCoregSupport = minCoregSupport,searchThresh=searchThresh,nGRN=nGRN)
     return(sigrns)'''
-    if results.shape[0]==0 | results.shape[1] <3:
-        raise ValueError("Something went wrong. No GRN found.")
+    # if results.shape[0]==0 | results.shape[1] <3:
+    #     raise ValueError("Something went wrong. No GRN found.")
 
-    results.iloc[:, 0] = None
+    # results.iloc[:, 0] = None
 
     '''        FIN A ECLAIRCIR
         sigrns = coregnet(result)

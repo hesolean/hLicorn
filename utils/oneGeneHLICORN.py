@@ -24,7 +24,7 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     neg = np.where(geneDiscExp.iloc[g, :] == -1)[0]+shift
     
     '''
-    /!\ JE N'AI PAS TROUVE A QUOI CORRESPOND 'support'
+    JE N'AI PAS TROUVE A QUOI CORRESPOND 'support'
     coact=coregs[which(support(transitemfreq, transRegBitData[c(pos,neg)])>= searchThresh )]
     pos =pos+shift
     neg=neg - shift
