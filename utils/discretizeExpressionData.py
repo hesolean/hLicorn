@@ -118,7 +118,7 @@ def discretizeExpressionData(numericalExpression,threshold=None,refSamples=None,
         threshold = centered_std * standardDeviationThreshold
     '''
 
-    '''         /!\ A VOIR
+    '''
     transcrit en python mais à priori pas besoin dans le calcul de discreteExpression
     nco = centered.shape[1]
     nro = centered.shape[0]

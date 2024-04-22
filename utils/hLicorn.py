@@ -72,7 +72,7 @@ def hLICORN(numericalExpression,Tflist,
     # copy of the 2 lists to evaluate the condition without modify the original lists
     num_row_names_sort = num_row_names.copy()
     dis_row_names_sort = dis_row_names.copy()
-    if numericalExpression.shape[0] != discreteExpression.shape[0] | num_row_names_sort.sort() != dis_row_names_sort.sort():
+    if numericalExpression.shape[0] != discreteExpression.shape[0] or num_row_names_sort.sort() != dis_row_names_sort.sort():
         raise ValueError("Discrete expression and continuous expression should have the same dimensions and the same rownames (gene/tf names)")
 
     '''
@@ -108,7 +108,7 @@ def hLICORN(numericalExpression,Tflist,
     ''' 
     genesupport = which(apply(abs(discreteExpression), 1 , sum) > (ncol(numericalExpression)*(minGeneSupport)))
     '''
-    genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > (np.shape(numericalExpression)[1] * minGeneSupport)[0])
+    genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > (np.shape(numericalExpression)[1] * minGeneSupport))
     
     # to be consistent with R indexing starting at 1
     '''
@@ -185,7 +185,6 @@ def hLICORN(numericalExpression,Tflist,
     regBitData =cbind(regDiscExp==+1 , regDiscExp== -1)
     transRegBitData= as(t(regBitData),"transactions")
     '''
-    '''                                                 /!\ PAUSE DANS LES VERIFICATIONS LE 12 04 2024 '''
     '''
     if(verbose){
         message("Mining coregulator ...")
@@ -228,17 +227,15 @@ def hLICORN(numericalExpression,Tflist,
     
         if maxCoreg > 1:
             result=apriori(transRegBitData_df, min_support=minCoregSupport/2, use_colnames=True, max_len=maxCoreg, verbose=0, low_memory=False)
-            transitemfreq.extend(result)
-
+            transitemfreq = pd.concat([transitemfreq, result])
         # pour ne pas avoir de doublons dans les singletons
         coregs = set(transitemfreq['itemsets'].tolist())
 
-    '''             /!\ QUESTION ????
+    '''
     transitemfreq=c(transitemfreq,suppressWarnings(miningFunction(transRegBitData,parameter=list(support =minCoregSupport/2,minlen=2,maxlen=maxCoreg,target="closed frequent itemsets")
             ,control=list(verbose=FALSE))))
     J'ai un soucis avec le "closed frequent itemset" car normalement dans ce cas, il faut que maxlen soit à 0 ??
     minlen n'est pas un paramètre de apriori donc il faut le passer autrement ?
-
 
     '''
 
@@ -268,7 +265,6 @@ def hLICORN(numericalExpression,Tflist,
     result=data.frame()
     gotNet=FALSE
     '''
-    result=np.dataframe()
     gotNet=False # on commence à un threathold élevé. Si on a pas de résultat, on réduit. C'est le gotNet qui dit si on continue ou non
 
     #just because it's easier toadd here 5% and remove it at the first line in the while loop, where it needs to be decrementale in case no GRNs are found
@@ -304,7 +300,7 @@ def hLICORN(numericalExpression,Tflist,
             gotNet=TRUE
         }
     }'''
-    while searchThresh >= 0.05 & gotNet==True :
+    while searchThresh >= 0.05 and gotNet==True :
         # decrements the search threshold in case nothing is found
         #(can be the case for VERY large datasets for which it can be hard to find regulators with 50% of matching +1 and -1)
         searchThresh =  1/((1/searchThresh)+1)
@@ -318,7 +314,7 @@ def hLICORN(numericalExpression,Tflist,
             return oneGeneHLICORN(gene, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, genexp=geneNumExp, regnexp=regNumExp, nresult=nGRN)
 
         if parallel =="multicore" & len(GeneList)>1 & using_processus > 1:
-            '''             /!\ QUESTION ????
+            '''
             ProcessPoolExecutor est un composant de la bibliothèque standard de Python qui permet d'exécuter des fonctions de manière asynchrone dans des processus parallèles.
             Il crée un pool de processus dans lequel les fonctions peuvent être exécutées de manière concurrente.
 
@@ -357,7 +353,7 @@ def hLICORN(numericalExpression,Tflist,
             '''
             
             
-            '''             /!\ QUESTION ????
+            '''
             version avec les Threads :
 
             from concurrent.futures import ThreadPoolExecutor
@@ -382,12 +378,12 @@ def hLICORN(numericalExpression,Tflist,
             with multiprocessing.Pool() as pool:
                 results = [pool.apply_async(process_gene, (gene,)) for gene in GeneList]
                 results = [res.get() for res in results]
-            '''             /!\ QUESTION ????
+            '''
             Pool() crée un pool de processus avec un nombre de processus par défaut (nombre de cœurs du CPU).
             pool.apply_async est utilisé pour exécuter de manière asynchrone la fonction process_gene pour chaque élément de GeneList.
             res.get() est utilisé pour obtenir les résultats de chaque tâche asynchrone.
             
-                        /!\ MULTIPROCESSING.POOL
+                       MULTIPROCESSING.POOL
             à utiliser avec une protection du main
             if __name__ == '__main__':
             '''
@@ -466,7 +462,7 @@ def hLICORN(numericalExpression,Tflist,
 
     results.iloc[:, 0] = None
 
-    '''         /!\ fin à éclaircir
+    '''        FIN A ECLAIRCIR
         sigrns = coregnet(result)
     sigrns@inferenceParameters=list(minGeneSupport=minGeneSupport,maxCoreg=maxCoreg,minCoregSupport = minCoregSupport,searchThresh=searchThresh,nGRN=nGRN)
         return(sigrns)'''
