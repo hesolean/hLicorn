@@ -13,7 +13,7 @@ def discretizeExpressionData(numericalExpression,threshold=None,refSamples=None,
     numericalExpression[pd.isna(numericalExpression)] = 0
 
     # create object before scaling
-    scaler = StandardScaler(with_mean=False, with_std=False)
+    scaler = StandardScaler(with_mean=True, with_std=False)
 
     # if refSample exist, scaling according to refSample values else scaling according to every values
     if refSamples!=None:

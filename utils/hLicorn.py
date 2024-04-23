@@ -27,8 +27,10 @@ def hLICORN(numericalExpression,Tflist,
     # determination of discrete values
     if discreteExpression==None:
         discreteExpression=discretizeExpressionData(numericalExpression)
+    
+    print(f"numericalExpression : {numericalExpression} de taille ", numericalExpression.shape)
+
     print(f"discreteExpression : {discreteExpression} de taille ", discreteExpression.shape)
-    # seems to get only ones
 
     # list of row names of discreteExpression
     dis_row_names = None
@@ -209,9 +211,10 @@ def hLICORN(numericalExpression,Tflist,
 
     regBitData =np.column_stack((regDiscExp == +1, regDiscExp == -1))
     # on garde les 1 et -1 mais tous mis à 1 car les itemsfrequent ne prennent pas les -1. C'est un choix par rapport à calculer les 2 séparéments
+    print(f"regBitData : {regBitData} de taille ", len(regBitData))
 
 
-    transRegBitData= regBitData.T # get a array with true then false
+    transRegBitData= regBitData.T # get an array with true then false
     print(f"transRegBitData : {transRegBitData}")
 
     if verbose:
@@ -230,6 +233,7 @@ def hLICORN(numericalExpression,Tflist,
     } -> on ne cherche les "close" que dans un cas particulier
     coregs =as(slot(transitemfreq,"items"),"list")
     '''
+    # transform transRegBitData in pandas df to use apriori
     te = TransactionEncoder()
     te_ary = te.fit(transRegBitData).transform(transRegBitData)
     transRegBitData_df = pd.DataFrame(te_ary, columns=te.columns_)
