@@ -10,13 +10,7 @@ from concurrent.futures import ProcessPoolExecutor
 # secondary functions
 from utils.discretizeExpressionData import discretizeExpressionData
 from utils.oneGeneHLICORN import oneGeneHLICORN
-
-'''
-hLICORN=function( numericalExpression,discreteExpression=discretizeExpressionData(numericalExpression)
-, TFlist, GeneList=setdiff(rownames(numericalExpression),TFlist),parallel = c("multicore","no", "snow"),cluster=NULL,
-minGeneSupport=0.1,minCoregSupport = 0.1,maxCoreg=length(TFlist),
-searchThresh=1/3,nGRN=100,verbose=FALSE)
-'''    
+    
 def hLICORN(numericalExpression,Tflist,
             discreteExpression=None,GeneList=None,parallel="no",cluster=None,
             minGeneSupport=0.1,minCoregSupport = 0.1,maxCoreg=None,searchThresh=1/3,nGRN=100,verbose=False):
@@ -57,137 +51,67 @@ def hLICORN(numericalExpression,Tflist,
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION BEFORE STARTING
 
-    '''
-        if(  sum(! unique(discreteExpression) %in% -1:1) > 0  ){
-            stop("Discrete expression data should only have values in {-1, 0, 1}")}
-    '''
     if  any(value not in [-1,0,1] for value in discreteExpression.stack().unique()):
         raise ValueError("Discrete expression data should only have values in {-1, 0, 1}")
 
-    '''    
-    if(length(rownames(numericalExpression)) > length(unique(rownames(numericalExpression)))){
-        stop("No gene duplicates are allowed in the row.names.")
-    }
-    ''' 
     if len(num_row_names) > len(set(num_row_names)):
         raise ValueError("No gene duplicates are allowed in the row names.")
 
-    '''
-    if(nrow(numericalExpression) != nrow(discreteExpression) |
-    sum(rownames(discreteExpression) != rownames(numericalExpression))>0 ){
-        stop("Discrete expression and continuous expression should have the same dimensions and the same rownames (gene/tf names)") }
-    '''
     # copy of the 2 lists to evaluate the condition without modify the original lists
     num_row_names_sort = num_row_names.copy()
     dis_row_names_sort = dis_row_names.copy()
     if numericalExpression.shape[0] != discreteExpression.shape[0] or num_row_names_sort.sort() != dis_row_names_sort.sort():
         raise ValueError("Discrete expression and continuous expression should have the same dimensions and the same rownames (gene/tf names)")
 
-    '''
-    if(length(intersect(TFlist,rownames(numericalExpression)))<=1 ){
-        stop("At least 2 of the provided regulators/transcription factor (TFlist) should be in the rownames in the gene expression matrix")    }
-    '''
     if len(set(num_row_names).intersection(set(tf_list)))<=1:
         raise ValueError("At least 2 of the provided regulators/transcription factor (TFlist) should be in the rownames in the gene expression matrix")
 
-    '''
-    if(length(intersect(GeneList,rownames(numericalExpression)))==0 ){
-        stop("The list of genes (GeneList) should be in the rownames in the gene expression matrix")    }
-    '''
     if len(set(num_row_names).intersection(set(GeneList)))==0:
         raise ValueError("The list of genes (GeneList) should be in the rownames in the gene expression matrix")
 
-    '''
-    parallel <- match.arg(parallel)
-    '''
     parallel_options = ["multicore","no", "snow"]
     if parallel not in parallel_options:
         raise ValueError("The option of parallelism should be \"multicore\", \"no\" or \"snow\"")
 
-    '''
-    if(verbose){
-        message("Pre-process.")
-    '''
     if verbose:
         print("Pre-process.")
     
     
     # select only genes and TF with ones or minus ones in at least minGeneSupport portion of samples
-    ''' 
-    genesupport = which(apply(abs(discreteExpression), 1 , sum) > (ncol(numericalExpression)*(minGeneSupport)))
-    '''
-    # get a tupple
     genes_support = np.where(np.sum(np.abs(discreteExpression), axis=1) > (np.shape(numericalExpression)[1] * minGeneSupport))
     print(f"genes_support de taille ", genes_support[0].shape)
 
-    # to be consistent with R indexing starting at 1
-    '''
-    discreteExpression=discreteExpression[genesupport,]
-    '''
-    discreteExpression=discreteExpression.iloc[genes_support] # get matrix with ones
+    discreteExpression=discreteExpression.iloc[genes_support]
     print(f"selected discreteExpression : {discreteExpression} de taille ", discreteExpression.shape)
 
-    '''
-    numericalExpression=numericalExpression[genesupport,]
-    '''
-    numericalExpression=numericalExpression.iloc[genes_support] # get numerical expression
+    numericalExpression=numericalExpression.iloc[genes_support]
     print(f"selected numericalExpression de taille ", numericalExpression.shape)
 
-    '''
-    TFlist = intersect(rownames(numericalExpression),TFlist)
-    '''
-    tf_list = list(set(num_row_names).intersection(tf_list)) # get a list
+    tf_list = list(set(num_row_names).intersection(tf_list))
     print(f"selected tf_list de taille ", len(tf_list))
 
-    '''
-    GeneList= intersect(rownames(numericalExpression),GeneList)
-    '''
-    GeneList= list(set(num_row_names).intersection(GeneList)) # get a list
+    GeneList= list(set(num_row_names).intersection(GeneList))
     print(f"selected GeneList de taille ", len(GeneList))
 
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION AFTER THE SELECTION OF THE GENES AND TF
 
-    '''    
-    if(length(TFlist)<5){
-        stop("Less than 5 of the provided TF are suitable to infer a network. Either provide more TF, more variations in the discrete dataset (more 1 or -1) or decrease the minGeneSupport parameter to select more but less variant TFs.")
-    }
-    '''
     if len(tf_list)<5:
         raise ValueError("Less than 5 of the provided TF are suitable to infer a network. Either provide more TF, more variations in the discrete dataset (more 1 or -1) or decrease the minGeneSupport parameter to select more but less variant TFs.")
 
-    '''
-    if(length(GeneList)==0){
-        stop("No genes were suitable to infer regulators. Either provide more variations in the discrete dataset (more 1 or -1) or decrease the minGeneSupport parameter to allow the selection of more but less variant Genes.")
-    }
-    '''
     if len(GeneList)==0:
         raise ValueError("No genes were suitable to infer regulators. Either provide more variations in the discrete dataset (more 1 or -1) or decrease the minGeneSupport parameter to allow the selection of more but less variant Genes.")
     
     
     # Get all the matrices and datasets needed (gene and tf expression, numerical or discrete)
     # If only one gene is given, R will automatically make a vector. The following make sure this does not happen.
-    '''    
-    if(length(GeneList)==1){
-        geneNumExp= matrix(numericalExpression[GeneList,],nrow=1)
-        geneDiscExp= matrix(discreteExpression[GeneList,],nrow=1)
-        rownames(geneNumExp)=GeneList
-        rownames(geneDiscExp)=GeneList
-    }else{
-        geneNumExp= numericalExpression[GeneList,]
-        geneDiscExp= discreteExpression[GeneList,]
-    }
-    '''
-    geneNumExp = numericalExpression.loc[GeneList] # get a dataframe
-    geneDiscExp= discreteExpression.loc[GeneList] # get a dataframe with ones
+    geneNumExp = numericalExpression.loc[GeneList]
+    geneDiscExp= discreteExpression.loc[GeneList] 
     print("geneNumExp de taille ", geneNumExp.shape, " et geneDiscExp de taille ", geneDiscExp.shape)
     print(f"geneNumExp : {geneNumExp}")
-    '''
-    regNumExp= numericalExpression[TFlist,]
-    regDiscExp= discreteExpression[TFlist,]
-    '''
-    regNumExp= numericalExpression.loc[tf_list] # get a dtatframe
-    regDiscExp= discreteExpression.loc[tf_list] # get a dataframe with ones
+
+    regNumExp= numericalExpression.loc[tf_list]
+    regDiscExp= discreteExpression.loc[tf_list]
     print("regNumExp de taille ", regNumExp.shape, " et regDiscExp de taille ", regDiscExp.shape)
     print(f"regDiscExp : {regDiscExp}")
 
@@ -196,26 +120,15 @@ def hLICORN(numericalExpression,Tflist,
     ## TRANSFORMING ALL DISCRETE DATA INTO TRANSACTIONS
     # To run apriori, the discrete data must be binary. So, the discrete data is simply becoming two concatenated binary matrix
     # first n samples are positive expression values, then all negative values.
-    '''
-    posSamples = 1:ncol(discreteExpression)
-    negSamples= (ncol(discreteExpression) +1):(ncol(discreteExpression) *2)
-    regBitData =cbind(regDiscExp==+1 , regDiscExp== -1)
-    transRegBitData= as(t(regBitData),"transactions")
-    '''
-    '''
-    if(verbose){
-        message("Mining coregulator ...")
-    }
-    '''
+
     posSamples = range(1,discreteExpression.shape[1]) # non utilisé
 
     negSamples= range(discreteExpression.shape[1]+1,discreteExpression.shape[1] *2) # non utilisé
 
-    posRegDiscExp = regDiscExp.applymap(lambda x: 1 if x == -1 else x) # get a df with minus ones replaced by ones
+    posRegDiscExp = regDiscExp.applymap(lambda x: 1 if x == -1 else x) # get a binary df with minus ones replaced by ones
     print(f"posRegDiscExp : {posRegDiscExp}")
 
-
-    transRegBitData= posRegDiscExp.T # get a transposed df
+    transRegBitData= posRegDiscExp.T
     print(f"transRegBitData : {transRegBitData} de type : ",type(transRegBitData))
 
     if verbose:
@@ -243,7 +156,7 @@ def hLICORN(numericalExpression,Tflist,
         if maxCoreg > 1:
             result=apriori(transRegBitData, min_support=minCoregSupport/2, use_colnames=True, max_len=maxCoreg, verbose=0, low_memory=True)
             transitemfreq = pd.concat([transitemfreq, result])
-        # pour ne pas avoir de doublons dans les singletons
+        # To avoid duplicates in singletons
         coregs = set(transitemfreq['itemsets'].tolist())
 
     print(f"transitemfreq : {transitemfreq} de taille ", transitemfreq.shape)
@@ -327,8 +240,11 @@ def hLICORN(numericalExpression,Tflist,
         #running hlicorn for each gene in a multithread way if needed.
         
         # get available cares on the machine and define how much to use
-        available_cores_nb = multiprocessing.cpu_count()
-        using_processus = max(1, available_cores_nb - 1) # on fait tourner joblib même si 1 coeur
+        # available_cores_nb = multiprocessing.cpu_count()
+        # using_processus = max(1, available_cores_nb - 1) 
+
+        # on fait tourner joblib même si 1 coeur
+        using_processus = 2
         print(f"using_processus : {using_processus}")
 
         def process_gene(gene, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, geneNumExp, regNumExp, nGRN):
@@ -337,20 +253,10 @@ def hLICORN(numericalExpression,Tflist,
 
         if parallel =="multicore" and len(GeneList)>1 & using_processus > 1:
             print("multicore")
-            '''
-            ProcessPoolExecutor est un composant de la bibliothèque standard de Python qui permet d'exécuter des fonctions de manière asynchrone dans des processus parallèles.
-            Il crée un pool de processus dans lequel les fonctions peuvent être exécutées de manière concurrente.
-
-            L'avantage de ProcessPoolExecutor par rapport à ThreadPoolExecutor est qu'il utilise des processus plutôt que des threads.
-            Cela signifie que chaque fonction est exécutée dans son propre processus, ce qui peut être bénéfique pour les tâches qui impliquent des opérations CPU-bound,
-            car elles peuvent être parallélisées sur plusieurs cœurs de CPU.
-            '''
-            
+                        
             '''
             Version avec joblib
-            
-            import multiprocessing
-            
+            '''            
             processes = [] # facultatif, uniquement pour récupérer la liste des processus qui se sont exécutés
             for _ in GeneList:
                 p = multiprocessing.Process(target=process_gene,args=[GeneList])
@@ -358,31 +264,10 @@ def hLICORN(numericalExpression,Tflist,
                 processes.append(p)
             
             for process in processes:
-                process.join() # pour forcer le programme à attendre que tous les process soient fini avec de continuer
+                process.join() # pour forcer le programme à attendre que tous les process soient finis avant de continuer
                 
-            peu importe le nombre de coeurs disponibles, les taches seront distribuées en fonction des ressources disponibles.
-            '''
-            
-            # create a pool with the number of processus wanted
-            with ProcessPoolExecutor() as executor:
-                # the results are in the list "results"
-                results = list(executor.map(process_gene, GeneList, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, geneNumExp, regNumExp, nGRN))
-                # je ne suis pas sûre de devoir laisser list() quand on utilise map(). map() garde une liste en mémoire contrairement à imap et imap_unordered
-                print(f"result : {results}")
-            '''
-            variante : results = [executor.submit(process_gene(gene)) for gene in GeneList]
-            à privilégier par rapport à multiprocessing ?!
-            mais il vaut mieux utiliser map qu'une boucle pour que les process s'exécutent dans l'ordre de la liste
-            '''
-            
-            '''
-            Version avec joblib :
-                
-            from joblib import Parallel, delayed, parallel_config
+            # peu importe le nombre de coeurs disponibles, les taches seront distribuées en fonction des ressources disponibles.
 
-            with parallel_config(backend="loky", inner_max_num_threads=2):
-                results = Parallel(n_jobs=using_processus)(delayed(process_gene)(gene) for gene in GeneList)
-            '''
             gotNet=True
 
         elif parallel =="snow" and cluster!=None & len(GeneList)>1:
@@ -397,9 +282,6 @@ def hLICORN(numericalExpression,Tflist,
             pool.apply_async est utilisé pour exécuter de manière asynchrone la fonction process_gene pour chaque élément de GeneList.
             res.get() est utilisé pour obtenir les résultats de chaque tâche asynchrone.
             
-                       MULTIPROCESSING.POOL
-            à utiliser avec une protection du main
-            if __name__ == '__main__':
             '''
             gotNet=True
 

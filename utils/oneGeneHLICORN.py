@@ -1,6 +1,7 @@
 # librabies
 import numpy as np
-from mlxtend.frequent_patterns import association_rules
+import pandas as pd
+from mlxtend.frequent_patterns import apriori
 
 # secondary functions
 from utils.eand import eand
@@ -35,12 +36,15 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     '''
     # select all the coregulators with a support of 50% minimum only in the samples with the target gene at ones or minus ones
     # indices for which the threshold is reached, then we select the elements
-    coact = association_rules(transitemfreq, metric="support", min_threshold=searchThresh) # pas besoin et support est une colonne du df donc dans le calcul des itemse, on peut filtrer directement les support avec le searchThresh et on le fait en même temps que le calcul des itemset
-    # !!!!!!!!!!!!!! aller sur le doc issue du github de mlxtend
+    pos_df = regDiscExp.iloc[pos]
+    neg_df = regDiscExp.iloc[neg]
+    pos_neg_df = pd.concat(pos_df,neg_df)
+    coact = apriori(pos_neg_df, min_support=0.5, use_colnames=True)
     print(f"coact : {coact}")
-    pos=pos+shift # on garde le fait de tester les pos neg puis les neg pos
-    neg=neg-shift
-    #corep =   liste des itemset qui sortent du df de frequent_itemset, il faut le jeu de données liée au gène étudié, transRegBitData(pos,neg)
+    # pos=pos+shift
+    # neg=neg-shift
+    neg_pos_df = pd.concat(neg_df,pos_df)
+    corep = apriori(neg_pos_df, min_support=0.5, use_colnames=True)
     print(f"corep : {corep}")
 
     '''
