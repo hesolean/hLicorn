@@ -28,24 +28,31 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     print(f"pos de taille : ", len(pos)," neg de taille : ", len(neg))
     print(f"pos : {pos}")
     print(f"neg : {neg}")
-    '''
-    coact=coregs[which(support(transitemfreq, transRegBitData[c(pos,neg)])>= searchThresh )]
-    pos =pos+shift
-    neg=neg - shift
-    corep=coregs[which(support(transitemfreq, transRegBitData[c(pos,neg)]) >= searchThresh )] # on relance le calcul d'itemset frequent mais sur une liste restreinte car que pour le gène en cours d'étude
-    '''
+
+    # function that return new frequent itemset according to the studied gene
+    def support(items, test_df):
+        freq_items = pd.DataFrame()
+        supports = []
+        for itemset in items.itemsets:
+            freq = test_df.shape[0]
+            for item in itemset:
+                sup = 0
+                if item in test_df.columns:	sup = test_df[test_df[item] == True][item].count()
+                if sup<freq :	freq=sup
+            print(str(itemset), " : " , str(freq))
+            supports.append(freq/test_df.shape[0])
+
+        freq_items["support"]=supports
+        freq_items["items"]=items.itemsets
+	
+        return freq_items
+
     # select all the coregulators with a support of 50% minimum only in the samples with the target gene at ones or minus ones
     # indices for which the threshold is reached, then we select the elements
-    pos_df = regDiscExp.iloc[pos]
-    neg_df = regDiscExp.iloc[neg]
-    pos_neg_df = pd.concat(pos_df,neg_df)
-    coact = apriori(pos_neg_df, min_support=0.5, use_colnames=True)
-    print(f"coact : {coact}")
-    # pos=pos+shift
-    # neg=neg-shift
-    neg_pos_df = pd.concat(neg_df,pos_df)
-    corep = apriori(neg_pos_df, min_support=0.5, use_colnames=True)
-    print(f"corep : {corep}")
+    coact_fi = support(transRegBitData.iloc[:, pos + neg], g)
+    coact = [item for item in coregs if coact_fi >= searchThresh]
+    corep_fi = support(transRegBitData.iloc[:, neg + pos], g)
+    corep = [item for item in coregs if corep_fi >= searchThresh]
 
     '''
     corep = c(corep,list(""))
