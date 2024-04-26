@@ -90,7 +90,9 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     '''
     corepexp[which(corepexp ==1)] = 2
     '''
-    #C_call(coactexp,corepexp,geneDiscExp)
+    corepexp.replace(1, 2, inplace=True)
+
+    C_call(coactexp, coact, corepexp, corep, g, geneDiscExp)
 
     '''
     # bad index will store all bad comparisons (could be done before computing .. right?)
