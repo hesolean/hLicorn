@@ -125,7 +125,7 @@ def hLICORN(numericalExpression,Tflist,
     discreteExpression=discreteExpression[genesupport,]
     '''
     discreteExpression=discreteExpression.iloc[genes_support] # get matrix with ones
-    print(f"selected discreteExpression de taille ", discreteExpression.shape)
+    print(f"selected discreteExpression : {discreteExpression} de taille ", discreteExpression.shape)
 
     '''
     numericalExpression=numericalExpression[genesupport,]
@@ -181,7 +181,7 @@ def hLICORN(numericalExpression,Tflist,
     geneNumExp = numericalExpression.loc[GeneList] # get a dataframe
     geneDiscExp= discreteExpression.loc[GeneList] # get a dataframe with ones
     print("geneNumExp de taille ", geneNumExp.shape, " et geneDiscExp de taille ", geneDiscExp.shape)
-
+    print(f"geneNumExp : {geneNumExp}")
     '''
     regNumExp= numericalExpression[TFlist,]
     regDiscExp= discreteExpression[TFlist,]
@@ -189,6 +189,8 @@ def hLICORN(numericalExpression,Tflist,
     regNumExp= numericalExpression.loc[tf_list] # get a dtatframe
     regDiscExp= discreteExpression.loc[tf_list] # get a dataframe with ones
     print("regNumExp de taille ", regNumExp.shape, " et regDiscExp de taille ", regDiscExp.shape)
+    print(f"regDiscExp : {regDiscExp}")
+
 
     ##    ##    ##    ##    ##    ##    ##    ##    ##
     ## TRANSFORMING ALL DISCRETE DATA INTO TRANSACTIONS
@@ -209,13 +211,12 @@ def hLICORN(numericalExpression,Tflist,
 
     negSamples= range(discreteExpression.shape[1]+1,discreteExpression.shape[1] *2) # non utilisé
 
-    regBitData =np.column_stack((regDiscExp == +1, regDiscExp == -1))
-    # on garde les 1 et -1 mais tous mis à 1 car les itemsfrequent ne prennent pas les -1. C'est un choix par rapport à calculer les 2 séparéments
-    print(f"regBitData : {regBitData} de taille ", len(regBitData))
+    posRegDiscExp = regDiscExp.applymap(lambda x: 1 if x == -1 else x) # get a df with minus ones replaced by ones
+    print(f"posRegDiscExp : {posRegDiscExp}")
 
 
-    transRegBitData= regBitData.T # get an array with true then false
-    print(f"transRegBitData : {transRegBitData}")
+    transRegBitData= posRegDiscExp.T # get a transposed df
+    print(f"transRegBitData : {transRegBitData} de type : ",type(transRegBitData))
 
     if verbose:
         print("Mining coregulator ...")
@@ -233,18 +234,14 @@ def hLICORN(numericalExpression,Tflist,
     } -> on ne cherche les "close" que dans un cas particulier
     coregs =as(slot(transitemfreq,"items"),"list")
     '''
-    # transform transRegBitData in pandas df to use apriori
-    te = TransactionEncoder()
-    te_ary = te.fit(transRegBitData).transform(transRegBitData)
-    transRegBitData_df = pd.DataFrame(te_ary, columns=te.columns_)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore") 
-        transitemfreq=apriori(transRegBitData_df, min_support=0.5, use_colnames=True, max_len=1, verbose=0, low_memory=False)
+        transitemfreq=apriori(transRegBitData, min_support=0.5, use_colnames=True, max_len=1, verbose=0, low_memory=True)
         # low_memory=True should only be used for large dataset if memory resources are limited 
     
         if maxCoreg > 1:
-            result=apriori(transRegBitData_df, min_support=minCoregSupport/2, use_colnames=True, max_len=maxCoreg, verbose=0, low_memory=False)
+            result=apriori(transRegBitData, min_support=minCoregSupport/2, use_colnames=True, max_len=maxCoreg, verbose=0, low_memory=True)
             transitemfreq = pd.concat([transitemfreq, result])
         # pour ne pas avoir de doublons dans les singletons
         coregs = set(transitemfreq['itemsets'].tolist())
@@ -322,7 +319,7 @@ def hLICORN(numericalExpression,Tflist,
         }
     }'''
     while searchThresh >= 0.05 and gotNet==False :
-        print("Boucle while") # on n'entre pas dans le while
+        print("Boucle while")
         # decrements the search threshold in case nothing is found
         #(can be the case for VERY large datasets for which it can be hard to find regulators with 50% of matching +1 and -1)
         searchThresh =  1/((1/searchThresh)+1)
@@ -331,10 +328,10 @@ def hLICORN(numericalExpression,Tflist,
         
         # get available cares on the machine and define how much to use
         available_cores_nb = multiprocessing.cpu_count()
-        using_processus = max(1, available_cores_nb - 1)
+        using_processus = max(1, available_cores_nb - 1) # on fait tourner joblib même si 1 coeur
         print(f"using_processus : {using_processus}")
 
-        def process_gene(gene):
+        def process_gene(gene, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, geneNumExp, regNumExp, nGRN):
             print("process_gene")
             return oneGeneHLICORN(gene, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, genexp=geneNumExp, regnexp=regNumExp, nresult=nGRN)
 
@@ -369,25 +366,13 @@ def hLICORN(numericalExpression,Tflist,
             # create a pool with the number of processus wanted
             with ProcessPoolExecutor() as executor:
                 # the results are in the list "results"
-                results = list(executor.map(process_gene, GeneList))
+                results = list(executor.map(process_gene, GeneList, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, geneNumExp, regNumExp, nGRN))
                 # je ne suis pas sûre de devoir laisser list() quand on utilise map(). map() garde une liste en mémoire contrairement à imap et imap_unordered
                 print(f"result : {results}")
             '''
             variante : results = [executor.submit(process_gene(gene)) for gene in GeneList]
             à privilégier par rapport à multiprocessing ?!
             mais il vaut mieux utiliser map qu'une boucle pour que les process s'exécutent dans l'ordre de la liste
-            '''
-            
-            
-            '''
-            version avec les Threads :
-
-            from concurrent.futures import ThreadPoolExecutor
-
-            with ThreadPoolExecutor() as executor:
-                results = list(executor.map(process_gene, GeneList))
-            
-            Il faut tester les méthodes ProcessPoolExecutor et ThreadPoolExecutor car dans certains cas, l'une est plus rapide que l'autre
             '''
             
             '''
@@ -403,7 +388,7 @@ def hLICORN(numericalExpression,Tflist,
         elif parallel =="snow" and cluster!=None & len(GeneList)>1:
             print("snow")
             with multiprocessing.Pool() as pool:
-                results = [pool.apply_async(process_gene, (gene,)) for gene in GeneList]
+                results = [pool.apply_async(process_gene, (gene, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, geneNumExp, regNumExp, nGRN)) for gene in GeneList]
                 results = [res.get() for res in results]
                 print(f"result : {results}")
 
@@ -421,7 +406,7 @@ def hLICORN(numericalExpression,Tflist,
         elif len(GeneList)>1:
             print("elif")
             # comprehension of the list to apply prosses_gene to each gene of the list
-            results = [process_gene(gene) for gene in GeneList]
+            results = [process_gene(gene, geneDiscExp, regDiscExp, coregs, transitemfreq, transRegBitData, searchThresh, geneNumExp, regNumExp, nGRN) for gene in GeneList]
             print(f"result : {results}")
             
             gotNet=True

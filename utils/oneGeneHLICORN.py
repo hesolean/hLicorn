@@ -1,5 +1,6 @@
 # librabies
 import numpy as np
+from mlxtend.frequent_patterns import association_rules
 
 # secondary functions
 from utils.eand import eand
@@ -12,43 +13,47 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     shift=ncol(geneDiscExp)
     '''
     shift=geneDiscExp.shape[1]
+    print(f"shift : {shift}")
 
     '''
     pos =which( geneDiscExp[g,]==1)
     neg=which( geneDiscExp[g,]== -1)+shift
     '''
     #sample index with the target gene at 1 or -1
-    pos = np.where(geneDiscExp.iloc[g, :] == 1)[0]
-    # negative samples are shifted because we are using a binary matrix with true false for ones in the first part
+    pos = np.where(geneDiscExp.loc[g, :] == 1)[0]
+    # negative samples are shifted because we are using a binary matrix with true false for ones in the first part transRegBitData(pos,neg)
     # and true false for -1 in the second part
-    neg = np.where(geneDiscExp.iloc[g, :] == -1)[0]+shift
-    
+    neg = np.where(geneDiscExp.loc[g, :] == -1)[0]+shift
+    print(f"pos de taille : ", len(pos)," neg de taille : ", len(neg))
+    print(f"pos : {pos}")
+    print(f"neg : {neg}")
     '''
-    JE N'AI PAS TROUVE A QUOI CORRESPOND 'support'
     coact=coregs[which(support(transitemfreq, transRegBitData[c(pos,neg)])>= searchThresh )]
     pos =pos+shift
     neg=neg - shift
-    corep=coregs[which(support(transitemfreq, transRegBitData[c(pos,neg)]) >= searchThresh )]
+    corep=coregs[which(support(transitemfreq, transRegBitData[c(pos,neg)]) >= searchThresh )] # on relance le calcul d'itemset frequent mais sur une liste restreinte car que pour le gène en cours d'étude
     '''
     # select all the coregulators with a support of 50% minimum only in the samples with the target gene at ones or minus ones
     # indices for which the threshold is reached, then we select the elements
-    coact_indices = np.where(support(transitemfreq, transRegBitData.iloc[:, pos + neg]) >= searchThresh)[0]
-    coact = coregs.iloc[coact_indices]
-
-    pos=pos+shift
+    coact = association_rules(transitemfreq, metric="support", min_threshold=searchThresh) # pas besoin et support est une colonne du df donc dans le calcul des itemse, on peut filtrer directement les support avec le searchThresh et on le fait en même temps que le calcul des itemset
+    # !!!!!!!!!!!!!! aller sur le doc issue du github de mlxtend
+    print(f"coact : {coact}")
+    pos=pos+shift # on garde le fait de tester les pos neg puis les neg pos
     neg=neg-shift
-    corep_indices = np.where(support(transitemfreq, transRegBitData.iloc[:, pos + neg]) >= searchThresh)[0]
-    corep = coregs.iloc[corep_indices]
-    
+    #corep =   liste des itemset qui sortent du df de frequent_itemset, il faut le jeu de données liée au gène étudié, transRegBitData(pos,neg)
+    print(f"corep : {corep}")
+
     '''
     corep = c(corep,list(""))
     coact = c(coact,list(""))
     '''
     # add empty coregulators to have the possibility to only have ativators or inhibitors
-    corep.append("")
-    coact.append("")
-    
-    '''    
+    corep.loc[len(corep)] = ""
+    coact.loc[len(coact)] = ""
+
+    # to have unique coregulators and a single vector of coreg (not a list)
+    '''   
+    juste les listes des noms triées 
     coactnames =unique(sapply(lapply(coact,sort),paste,collapse=" "))
     coact=strsplit(coactnames," ")
     coact[[which(coactnames=="")]]=""
@@ -56,44 +61,27 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     corep=strsplit(corepnames," ")
     corep[[which(corepnames=="")]]=""
     '''
-    # to have unique coregulators and a single vector of coreg (not a list)
-    #coactnames =unique(sapply(lapply(coact,sort),paste,collapse=" "))
-    coact_sorted = coact.apply(sorted, axis=1)
-    coact_pasted = coact_sorted.apply(lambda x: ' '.join(map(str, x)))
-    coactnames = coact_pasted.unique()
+    coact = coact.drop_duplicates() # vérifier si utile
+    corep = corep.drop_duplicates()
 
-    coact=coactnames.split()
-    coact[coactnames.iloc[g, :]==("")]=""
+    # merge expression of coregulator and corepressor
+    print(f"regDiscExp : {regDiscExp}")
 
-    corep_sorted = corep.apply(sorted, axis=1)
-    corep_pasted = corep_sorted.apply(lambda x: ' '.join(map(str, x)))
-    corepnames = corep_pasted.unique()
+    coactexp = eand(coact, regDiscExp)
+    corepexp = eand(corep, regDiscExp)
 
-    corep=corepnames.split()
-    corep[corepnames.iloc[g, :]==("")]=""
+    print(f"coactexp : {coactexp}")
+    print(f"corepexp : {corepexp}")
 
-    '''   
-    coactexp = eand(coact,regDiscExp)
-    corepexp = as.integer(eand(corep,regDiscExp))
-    '''
-    # merge merge expression of coregulator and corepressor
-    coactexp = eand(coact,regDiscExp)
-    corepexp = int(eand(corep,regDiscExp))
-
+    # active inhibitor has a stronger impact than naything else in licorn:
     '''
     corepexp[which(corepexp ==1)] = 2
     '''
-    # active inhibitor has a stronger impact than naything else in licorn:
-    corepexp.replace(1, 2, inplace=True)    
+    #C_call(coactexp,corepexp,geneDiscExp)
 
-    C_call(coactexp,corepexp,geneDiscExp)
-    
+    '''
     # bad index will store all bad comparisons (could be done before computing .. right?)
     # then, no intersection between act and rep (includes both empty
-
-    ''' A PARTIR DE LA, JE N'AI PAS COMPRIS EXACTEMENT L'INTERET DONC A REVOIR 
-    // on combine les colonnes 8 et 9 qui viennent de x avec la longueur de l'intersection entre un coactivateur et un coinhibiteur
-    pour finir on renvoie les indices des valeurs égales à 0
     goodindex=which(apply(cbind(x[[8]],x[[9]]),1,function(y){
         return(length(intersect( coact[[y[1]]],corep[[y[2]]] )))
     })==0)
@@ -102,10 +90,10 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     selact = coactnames[x[[8]][goodindex]]
     selrep = corepnames[x[[9]][goodindex]]
     
-    # all empty set of coregulators are set to NA
+    # all emty set of coregulators are set to NA
     selact[which(selact=="")]=NA
     selrep[which(selrep=="")]=NA
-    // calcul de performence du modèle de regression Mean Absolute Error
+    
     mae = x[[7]][goodindex]
     if(!is.na(nresult)){
         # get 100 first ranks, if ties, might get more ...
@@ -139,4 +127,4 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     
     return(data.frame(GRN,numscores,stringsAsFactors = FALSE))
     
-    }'''
+}'''
