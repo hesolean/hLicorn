@@ -65,7 +65,9 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
     corep=strsplit(corepnames," ")
     corep[[which(corepnames=="")]]=""
     '''
-    coact = coact.drop_duplicates() # vérifier si utile
+    coactnames = sorted(set(coact['itemsets'].split()))
+    corepnames = sorted(set(corep['itemsets'].split()))
+    coact = coact.drop_duplicates()
     corep = corep.drop_duplicates()
 
     # merge expression of coregulator and corepressor

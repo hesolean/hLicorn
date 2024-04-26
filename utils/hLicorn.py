@@ -150,7 +150,7 @@ def hLICORN(numericalExpression,Tflist,
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore") 
-        transitemfreq=apriori(transRegBitData, min_support=0.5, use_colnames=True, max_len=1, verbose=0, low_memory=True)
+        transitemfreq=apriori(transRegBitData, min_support=0.9, use_colnames=True, max_len=1, verbose=0, low_memory=True)
         # low_memory=True should only be used for large dataset if memory resources are limited 
     
         if maxCoreg > 1:
