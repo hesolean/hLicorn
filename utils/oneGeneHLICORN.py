@@ -1,46 +1,34 @@
 # librabies
 import numpy as np
+from numpy import intersect1d
 import pandas as pd
-from mlxtend.frequent_patterns import apriori
+from sklearn.linear_model import LinearRegression
 
 # secondary functions
 from utils.eand import eand
 from utils.C_call import C_call
 
 
-'''oneGeneHLICORN = function(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData,searchThresh,regnexp,genexp,nresult)'''
-def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData,searchThresh,regnexp,genexp,nresult):
-    '''{
-    shift=ncol(geneDiscExp)
-    '''
-    shift=geneDiscExp.shape[1]
-    print(f"shift : {shift}")
+def oneGeneHLICORN(g, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, search_thresh, gen_exp, nresult) :
+    print("oneGene")
+    shift=gene_disc_exp.shape[1]
 
-    '''
-    pos =which( geneDiscExp[g,]==1)
-    neg=which( geneDiscExp[g,]== -1)+shift
-    '''
     #sample index with the target gene at 1 or -1
-    pos = np.where(geneDiscExp.loc[g, :] == 1)[0]
-    # negative samples are shifted because we are using a binary matrix with true false for ones in the first part transRegBitData(pos,neg)
-    # and true false for -1 in the second part
-    neg = np.where(geneDiscExp.loc[g, :] == -1)[0]+shift
-    print(f"pos de taille : ", len(pos)," neg de taille : ", len(neg))
-    print(f"pos : {pos}")
-    print(f"neg : {neg}")
+    pos=np.where(gene_disc_exp.loc[g, :] == 1)[0]
+    neg=np.where(gene_disc_exp.loc[g, :] == -1)[0] + shift
 
     # function that return new frequent itemset according to the studied gene
-    def support(items, test_df):
-        freq_items = pd.DataFrame()
-        supports = []
-        for itemset in items.itemsets:
-            freq = test_df.shape[0]
-            for item in itemset:
-                sup = 0
-                if item in test_df.columns:	sup = test_df[test_df[item] == True][item].count()
+    def support(items, test_df) :
+        freq_items=pd.DataFrame()
+        supports=[]
+        for itemset in items.itemsets :
+            freq=test_df.shape[0]
+            for item in itemset :
+                sup=0
+                if item in test_df.columns :	sup = test_df[test_df[item] == True][item].count()
                 if sup<freq :	freq=sup
             print(str(itemset), " : " , str(freq))
-            supports.append(freq/test_df.shape[0])
+            supports.append(freq / test_df.shape[0])
 
         freq_items["support"]=supports
         freq_items["items"]=items.itemsets
@@ -49,97 +37,93 @@ def oneGeneHLICORN(g,geneDiscExp,regDiscExp,coregs,transitemfreq,transRegBitData
 
     # select all the coregulators with a support of 50% minimum only in the samples with the target gene at ones or minus ones
     # indices for which the threshold is reached, then we select the elements
-    coact_fi = support(transRegBitData.iloc[:, pos + neg], g)
-    coact = [item for item in coregs if coact_fi >= searchThresh]
-    corep_fi = support(transRegBitData.iloc[:, neg + pos], g)
-    corep = [item for item in coregs if corep_fi >= searchThresh]
+    co_act_fi=support(trans_reg_bit_data.iloc[:, pos + neg], g)
+    co_act=[item for item in co_regs if co_act_fi >= search_thresh]
+    co_rep_fi=support(trans_reg_bit_data.iloc[:, neg + pos], g)
+    co_rep=[item for item in co_regs if co_rep_fi >= search_thresh]
 
-    '''
-    corep = c(corep,list(""))
-    coact = c(coact,list(""))
-    '''
     # add empty coregulators to have the possibility to only have ativators or inhibitors
-    corep.loc[len(corep)] = ""
-    coact.loc[len(coact)] = ""
+    co_rep.loc[len(co_rep)]=""
+    co_act.loc[len(co_act)]=""
 
     # to have unique coregulators and a single vector of coreg (not a list)
-    '''   
-    juste les listes des noms triées 
-    coactnames =unique(sapply(lapply(coact,sort),paste,collapse=" "))
-    coact=strsplit(coactnames," ")
-    coact[[which(coactnames=="")]]=""
-    corepnames =unique(sapply(lapply(corep,sort),paste,collapse=" "))
-    corep=strsplit(corepnames," ")
-    corep[[which(corepnames=="")]]=""
-    '''
-    coactnames = sorted(set(coact['itemsets'].split()))
-    corepnames = sorted(set(corep['itemsets'].split()))
-    coact = coact.drop_duplicates()
-    corep = corep.drop_duplicates()
+    co_act_names=sorted(set(co_act['itemsets'].split()))
+    co_rep_names=sorted(set(co_rep['itemsets'].split()))
+    co_act=co_act.drop_duplicates()
+    co_rep=co_rep.drop_duplicates()
 
     # merge expression of coregulator and corepressor
-    print(f"regDiscExp : {regDiscExp}")
-
-    coactexp = eand(coact, regDiscExp)
-    corepexp = eand(corep, regDiscExp)
-
-    print(f"coactexp : {coactexp}")
-    print(f"corepexp : {corepexp}")
-
+    # print(f"reg_disc_exp : {reg_disc_exp}")
+    co_act_exp=eand(co_act, reg_disc_exp)
+    co_rep_exp=eand(co_rep, reg_disc_exp)
+    
     # active inhibitor has a stronger impact than naything else in licorn:
-    '''
-    corepexp[which(corepexp ==1)] = 2
-    '''
-    corepexp.replace(1, 2, inplace=True)
+    co_rep_exp.replace(1, 2, inplace=True)
 
-    C_call(coactexp, coact, corepexp, corep, g, geneDiscExp)
+    C_call(co_act_exp, co_act, co_rep_exp, co_rep, g, gene_disc_exp)
 
-    '''
     # bad index will store all bad comparisons (could be done before computing .. right?)
     # then, no intersection between act and rep (includes both empty
-    goodindex=which(apply(cbind(x[[8]],x[[9]]),1,function(y){
-        return(length(intersect( coact[[y[1]]],corep[[y[2]]] )))
-    })==0)
-    
-    
-    selact = coactnames[x[[8]][goodindex]]
-    selrep = corepnames[x[[9]][goodindex]]
-    
-    # all emty set of coregulators are set to NA
-    selact[which(selact=="")]=NA
-    selrep[which(selrep=="")]=NA
-    
-    mae = x[[7]][goodindex]
-    if(!is.na(nresult)){
+
+    # empilement de x[8] et x[9] mais je ne sais pas à quoi correspondent les x[8], x[9]
+    combined_matrix=np.column_stack((x[[8]], x[[9]]))
+
+    good_index=[]
+
+    # Boucle for pour appliquer intersect() à chaque ligne
+    for i, column in enumerate(combined_matrix) :
+        vector1=co_act[[column[0]]]
+        vector2=co_rep[[column[1]]]
+        intersection_length=len(intersect1d(vector1, vector2))
+        if intersection_length == 0 :
+            good_index.append(i)
+
+    sel_act=[co_act_names[x[[8]]] for i in good_index]
+    sel_rep=[co_rep_names[x[[9]]] for i in good_index]
+
+    # all empty set of coregulators are set to NA
+    sel_act[pd.isempty(sel_act)]=pd.NA
+    sel_rep[pd.isempty(sel_rep)]=pd.NA
+
+    mae=[x[[7]] for i in good_index]
+    if not pd.isna(nresult) :
         # get 100 first ranks, if ties, might get more ...
-        bestindex= which(rank(mae,ties.method="min")<=nresult)
-        GRN = data.frame("Target"=rep(g, length(bestindex)),"coact"=selact[bestindex],   "corep"=selrep[bestindex] ,stringsAsFactors=FALSE)      
-    }else{
-        bestindex= which(rank(mae,ties.method="min")==1)
-        GRN = data.frame("Target"=rep(g, length(bestindex)),"coact"=selact[bestindex],   "corep"=selrep[bestindex] ,stringsAsFactors=FALSE)      
+        best_index=mae[mae.rank(method='min') <= nresult].index
         
-    }
-  
+    else :
+        best_index=mae[mae.rank(method='min') == 1].index
+
+    # new df with targets and co_regs
+    GRN = pd.DataFrame({
+        "Target": [g[i] for i in best_index for _ in range(len(g))],
+        "co_act": [sel_act[i] for i in best_index],
+        "co_rep": [sel_rep[i] for i in best_index]
+    })
+
     # if no grn are found return NULL
-    if(nrow(GRN)==0){
-        return(NULL)
-    }
-    
-    if(is.matrix(GRN) | is.data.frame(GRN)){
-        linearmodels=.getEntry(apply(GRN,1,.fitGRN,genexp=t(genexp),regexp=t(regnexp),permut=FALSE),"numscores")
-    }else{
-        #    linearmodels=.linearCoregulationBootstrap(as.character(GRN),genexp=gexp,regnexp=regnexp,numBootstrap=numBootstrap)
-        linearmodels=.fitGRN(as.character(GRN),genexp=t(genexp),regexp=t(regnexp),permut=FALSE)$numscores
-    }
-    
-    numscores=data.frame(t(linearmodels),stringsAsFactors = FALSE)
-    
-    numscores[,3]=as.numeric(numscores[,3])
-    numscores[,4]=as.numeric(numscores[,4])
-    numscores[,5]=as.numeric(numscores[,5])
-    numscores[,6]=as.numeric(numscores[,6])
-    colnames(GRN)=c("Target","coact","corep")
-    
-    return(data.frame(GRN,numscores,stringsAsFactors = FALSE))
-    
-}'''
+    if GRN.shape == 0 :
+        return None
+
+    if isinstance(GRN, np.ndarray) or isinstance(GRN, pd.DataFrame) :
+        linear_models=np.apply_along_axis(
+            lambda row : LinearRegression().fit(row.reshape(-1, 1), gen_exp.reshape(-1, 1)).coef_[0], 
+            axis=1, 
+            arr=GRN
+        )
+    else :
+        # if GRN is not matrix nor dataframe
+        linear_models=LinearRegression().fit(GRN.reshape(-1, 1), gen_exp.reshape(-1, 1)).coef_[0]
+
+    num_scores=pd.DataFrame({"numscores": linear_models})
+    num_scores.iloc[:, 2:6]=num_scores.iloc[:, 2:6].apply(pd.to_numeric)
+    num_scores.columns=["Target", "co_act", "co_rep"]
+
+    result=pd.concat([GRN, num_scores], axis=1, ignore_index=True)
+
+    # type conversion in string
+    result=result.astype(str)
+
+    # rename the columns
+    result.columns=["Target", "co_act", "co_rep", "num_scores1", "num_scores2", "num_scores3", "num_scores4"]
+    print("fin oneGene")
+    return  result

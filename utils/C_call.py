@@ -2,25 +2,15 @@
 import numpy as np
 import ctypes
     
-'''on appelle le bout de programme en C, A VERIFIER
-x= .C("combnLicorn",
-as.integer(t(coactexp)),as.integer(length(coact)),#expression and number of coactivators
-as.integer(t(corepexp)),as.integer(length(corep)),#expression and number of corepressors
-as.integer(geneDiscExp[g,]),      as.integer(ncol(geneDiscExp)),    #expression of gene, number of samples
-as.double(rep(-1,(length(coact))*(length(corep)))),# vector to store MAE results
-as.integer(rep(-1,(length(coact))*(length(corep)))),# vector to store index of coactivator
-as.integer(rep(-1,(length(coact))*(length(corep))))# vector to store index of corepressor
-)
-'''
-def C_call(coactexp, coact, corepexp, corep, g, geneDiscExp):
+def C_call(co_act_exp, co_act, co_rep_exp, co_rep, g, gene_disc_exp) :
     # Chargement la bibliothèque partagée contenant la fonction C, /!\ AJUSTER LE CHEMIN
-    lib = ctypes.CDLL("./library.so")
+    lib=ctypes.CDLL("./library.so")
 
-    # Définition des types des arguments de la fonction C
-    lib.combnLicorn.argtypes = [
-        ctypes.POINTER(ctypes.c_int),  # coactexp
+    # definition of argument types for the C function
+    lib.combnLicorn.argtypes=[
+        ctypes.POINTER(ctypes.c_int),  # co_act_exp
         ctypes.POINTER(ctypes.c_int),  # ncoacts
-        ctypes.POINTER(ctypes.c_int),  # corepexp
+        ctypes.POINTER(ctypes.c_int),  # co_rep_exp
         ctypes.POINTER(ctypes.c_int),  # ncoreps
         ctypes.POINTER(ctypes.c_int),  # gexp
         ctypes.POINTER(ctypes.c_int),  # nsamples
@@ -29,29 +19,29 @@ def C_call(coactexp, coact, corepexp, corep, g, geneDiscExp):
         ctypes.POINTER(ctypes.c_int),  # irep
     ]
 
-    # Définition des valeurs des arguments
-    coactexp = coactexp.T
-    ncoacts = len(coact)
-    corepexp = corepexp.T
-    ncoreps = len(corep)
-    gexp = geneDiscExp.iloc[g] 
-    nsamples = len(gexp)
-    mae = np.full(ncoacts * ncoreps, -1)
-    iact = np.full(ncoacts * ncoreps, -1)
-    irep = np.full(ncoacts * ncoreps, -1)
+    # definition of the values
+    co_act_exp=co_act_exp.T
+    nco_acts=len(co_act)
+    co_rep_exp=co_rep_exp.T
+    ncoreps=len(co_rep)
+    g_exp=gene_disc_exp.iloc[g] 
+    nsamples=len(g_exp)
+    mae=np.full(nco_acts * ncoreps, -1)
+    iact=np.full(nco_acts * ncoreps, -1)
+    irep=np.full(nco_acts * ncoreps, -1)
 
-    # Appel de la fonction C avec les arguments appropriés
+    # C_call with right arguments
     lib.combnLicorn(
-        coactexp.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
-        ncoacts.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
-        corepexp.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+        co_act_exp.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+        nco_acts.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+        co_rep_exp.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
         ncoreps.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
-        gexp.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+        g_exp.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
         nsamples.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
         mae.ctypes.data_as(ctypes.POINTER(ctypes.c_double)),
         iact.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
         irep.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
     )
 
-    # result, iact, irep contiennent les résultats retournés par la fonction C
+    # mae, iact, irep give the results of C function
     return (mae, iact, irep)

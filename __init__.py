@@ -5,15 +5,15 @@ import pandas as pd
 from utils.hLicorn import hLICORN
 
 def main():
-    numericalExpression = pd.read_csv('CIT.csv')
+    numerical_expression = pd.read_csv('CIT.csv')
 
     # rownames as index to exit str in the dataframe
-    numericalExpression.set_index(numericalExpression.columns[0], inplace=True)
+    numerical_expression.set_index(numerical_expression.columns[0], inplace=True)
 
-    Tflist = pd.read_csv('HumanTF.csv')
+    tf_list = pd.read_csv('HumanTF.csv')
 
     try:
-       hLICORN(numericalExpression,Tflist)
+       hLICORN(numerical_expression,tf_list, parallel="multicore")
     except ValueError as e:
         print(e)
 
