@@ -13,7 +13,7 @@ def main():
     tf_list = pd.read_csv('HumanTF.csv')
 
     try:
-       hLICORN(numerical_expression,tf_list, parallel="multicore")
+       hLICORN(numerical_expression,tf_list, parallel="no", max_coreg=3)
     except ValueError as e:
         print(e)
 

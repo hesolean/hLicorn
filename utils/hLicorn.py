@@ -9,10 +9,9 @@ import multiprocessing
 from utils.discretize_expression_data import discretize_expression_data
 from utils.oneGeneHLICORN import oneGeneHLICORN
 
-
-def hLICORN(numerical_expression,tf_list,
-            discrete_expression=None,gene_list=None,parallel="no",cluster=None,
-            min_gene_support=0.1,min_coreg_support = 0.1,max_coreg=None,search_thresh=1/3,nGRN=100,verbose=False):
+def hLICORN(numerical_expression, tf_list,
+            discrete_expression=None, gene_list=None, parallel="no", cluster=None,
+            min_gene_support=0.1, min_coreg_support = 0.1, max_coreg=None, search_thresh=1/3, nGRN=100, verbose=False) :
     # list of Tf
     tf_list=tf_list.iloc[:, 1].tolist()
 
@@ -28,7 +27,6 @@ def hLICORN(numerical_expression,tf_list,
 
     # determination of gene_list
     num_row_names=None
-    gene_list=None
     if gene_list == None :
         # access to names of the rows of numerical_expression to get a list
         num_row_names=numerical_expression.index.tolist()
@@ -42,7 +40,7 @@ def hLICORN(numerical_expression,tf_list,
     #######  #######  #######  #######  #######  #######
     # INPUT VERIFICATION BEFORE STARTING
 
-    if  any(value not in [-1,0,1] for value in discrete_expression.stack().unique()):
+    if any(value not in [-1,0,1] for value in discrete_expression.stack().unique()):
         raise ValueError("Discrete expression data should only have values in {-1, 0, 1}")
 
     if len(num_row_names) > len(set(num_row_names)) :
@@ -54,13 +52,13 @@ def hLICORN(numerical_expression,tf_list,
     if numerical_expression.shape[0] != discrete_expression.shape[0] or num_row_names_sort.sort() != dis_row_names_sort.sort() :
         raise ValueError("Discrete expression and continuous expression should have the same dimensions and the same rownames (gene/tf names)")
 
-    if len(set(num_row_names).intersection(set(tf_list)))<=1 :
+    if len(set(num_row_names).intersection(set(tf_list))) <= 1 :
         raise ValueError("At least 2 of the provided regulators/transcription factor (tf_list) should be in the rownames in the gene expression matrix")
 
     if len(set(num_row_names).intersection(set(gene_list))) == 0 :
         raise ValueError("The list of genes (gene_list) should be in the rownames in the gene expression matrix")
 
-    parallel_options=["multicore","no", "snow"]
+    parallel_options=["multicore", "no", "spark"]
     if parallel not in parallel_options :
         raise ValueError("The option of parallelism should be \"multicore\", \"no\" or \"snow\"")
 
@@ -90,7 +88,7 @@ def hLICORN(numerical_expression,tf_list,
     gene_num_exp=numerical_expression.loc[gene_list]
     gene_disc_exp=discrete_expression.loc[gene_list] 
 
-    reg_num_exp=numerical_expression.loc[tf_list]
+    reg_num_exp=numerical_expression.loc[tf_list] # not used
     reg_disc_exp=discrete_expression.loc[tf_list]
 
     ##    ##    ##    ##    ##    ##    ##    ##    ##
@@ -98,12 +96,24 @@ def hLICORN(numerical_expression,tf_list,
     # To run apriori, the discrete data must be binary. So, the discrete data is simply becoming two concatenated binary matrix
     # first n samples are positive expression values, then all negative values.
 
-    pos_samples=range(1,discrete_expression.shape[1]) # non used
-    neg_samples=range(discrete_expression.shape[1]+1,discrete_expression.shape[1] *2) # non used
+    pos_samples=range(1,discrete_expression.shape[1]) # not used
+    neg_samples=range(discrete_expression.shape[1]+1,discrete_expression.shape[1] *2) # not used
 
-    pos_reg_disc_exp=reg_disc_exp.map(lambda x: 1 if x == -1 else x)
-    trans_reg_bit_data=pos_reg_disc_exp.T
+    # tranform minus ones in zeros and rename columns to get positives set
+    pos_reg_disc_exp=reg_disc_exp.map(lambda x: 0 if x == -1 else x)
+    pos_reg_disc_exp.columns = [f"pos_{col}" for col in pos_reg_disc_exp.columns]
 
+    # transform ones in zeros and minus ones in ones for the apriori and rename columns to get negatives set
+    neg_reg_disc_exp=reg_disc_exp.map(lambda x: 0 if x == 1 else 1 if x == -1 else x)
+    neg_reg_disc_exp.columns = [f"neg_{col}" for col in neg_reg_disc_exp.columns]
+
+    # concat the 2 dataframes in one
+    global_reg_disc_exp=pd.concat([pos_reg_disc_exp, neg_reg_disc_exp], axis=1)
+
+    # transpose for apriori function
+    trans_reg_bit_data=global_reg_disc_exp.T
+    print(f"trans_reg_bit_data :  {trans_reg_bit_data}")
+    
     if verbose :
         print("Mining coregulator ...")
     
@@ -113,13 +123,13 @@ def hLICORN(numerical_expression,tf_list,
     with warnings.catch_warnings():
         print("Calcul des itemset frequents")
         warnings.simplefilter("ignore") 
-        trans_item_freq=apriori(trans_reg_bit_data, min_support=0.9, use_colnames=True, max_len=1, verbose=0, low_memory=True)
+        trans_item_freq=apriori(trans_reg_bit_data, min_support=0.9, use_colnames=True, max_len=1, verbose=0)
         # low_memory=True should only be used for large dataset if memory resources are limited 
     
         if max_coreg > 1 :
-            result=apriori(trans_reg_bit_data, min_support=min_coreg_support/2, use_colnames=True, max_len=max_coreg, verbose=0, low_memory=True)
+            result=apriori(trans_reg_bit_data, min_support=min_coreg_support/2, use_colnames=True, max_len=max_coreg, verbose=0)
             trans_item_freq=pd.concat([trans_item_freq, result])
-        # To avoid duplicates in singletons
+        # to avoid duplicates in singletons
         co_regs=set(trans_item_freq['itemsets'].tolist())
 
     if verbose :
@@ -134,7 +144,7 @@ def hLICORN(numerical_expression,tf_list,
 
     got_net=False # on commence à un threathold élevé. Si on a pas de résultat, on réduit. C'est le got_net qui dit si on continue ou non
 
-    #just because it's easier toadd here 5% and remove it at the first line in the while loop, where it needs to be decrementale in case no GRNs are found
+    #just because it's easier to add here 5% and remove it at the first line in the while loop, where it needs to be decrementale in case no GRNs are found
     search_thresh=1 / ((1 / search_thresh) - 1)
 
     # In very large datasets of very heterogeneous samples (such as the large collection of unrelated cell lines ...)
@@ -154,39 +164,31 @@ def hLICORN(numerical_expression,tf_list,
         # using_processus = max(1, available_cores_nb - 1) 
         using_processus=2
 
-        def process_gene(gene, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, search_thresh, gene_num_exp, nGRN) :
-            return oneGeneHLICORN(gene, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, search_thresh, genexp=gene_num_exp, nresult=nGRN)
-
-        if parallel == "multicore" and len(gene_list) > 1 & using_processus > 1 :
+        if parallel == "multicore" and len(gene_list) > 1 and using_processus > 1 :
             print("multicore")
-            # optional, only to retreive the list of processes that have executed
-            processes=[]
-            for _ in gene_list :
-                p = multiprocessing.Process(target=process_gene, args=[gene_list])
-                p.start()
-                processes.append(p)
-            
-            for process in processes :
-                process.join() # wait for the end of all the process before continue
 
             got_net=True
 
-        elif parallel == "snow" and cluster != None & len(gene_list) > 1 :
-            with multiprocessing.Pool() as pool :
-                results=[pool.apply_async(process_gene, (gene, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, search_thresh, gene_num_exp, nGRN)) for gene in gene_list]
-                results=[res.get() for res in results]
+        elif parallel == "spark" :
+            print("spark")
 
             got_net=True
 
         elif len(gene_list) > 1 :
+            print("3eme")
+            results=[]
             # comprehension of the list to apply prosses_gene to each gene of the list
-            results=[process_gene(gene, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, search_thresh, gene_num_exp, nGRN) for gene in gene_list]
+            for gene in gene_list :
+                print(f"gene : {gene}")
+                results.append(oneGeneHLICORN(gene, gene_disc_exp, reg_disc_exp, co_regs, trans_item_freq, trans_reg_bit_data, search_thresh, reg_num_exp, gene_num_exp, nresult=nGRN))
             
             got_net=True
 
         else :
-            # in this case, wich gene do we pass ?
-            results=oneGeneHLICORN(gene, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, search_thresh, genexp=gene_num_exp, nresult=nGRN)
+            print("dernier")
+            # in this case, gene_list only have ine element
+            gene=gene_list[0]
+            results=oneGeneHLICORN(gene, gene_disc_exp, reg_disc_exp, co_regs, trans_item_freq, trans_reg_bit_data, search_thresh, reg_num_exp, gene_num_exp, nresult=nGRN)
 
             got_net=True
 
@@ -196,18 +198,16 @@ def hLICORN(numerical_expression,tf_list,
         print("got_net")
         # if needed, like when used in parallel, merge the results into a data.frame
         if not isinstance(results, pd.DataFrame) :
-            '''& !is.matrix(result) : doit-on réellement tester si le résultat est une matrice puisqu'on est dans python ?'''
             results=pd.DataFrame(results)
         else :
             got_net=False
         # if LICORN actually did find some networks ... (meaning at least one GRN)
         if results.shape[1] >= 3 and results.shape[0] > 0 :
             # Maybe LICORN did find somes nets, but not enough .. (for less then 5% of the genes)
-            if len(result['Target'].unique().tolist()) < (0.05*len(gene_list)) :
+            if len(result['Target'].unique().tolist()) < (0.05 * len(gene_list)) :
                 got_net=False
         else :
             got_net=False
-        # got_net is always False
 
         if verbose :
             print("got" + str(results.shape[0]) + "grn")
@@ -217,21 +217,13 @@ def hLICORN(numerical_expression,tf_list,
     
     print("presque fin")
     #When done decrementing the threshold .... well if nothing was found maybe there is a probleme somewhere ...
-    '''
-    if(nrow(result) ==0 | ncol(result) <3){
-        stop("Something went wrong. No GRN found.")
-    }
-    rownames(result)=NULL
-    sigrns = coregnet(result)
-    sigrns@inferenceParameters=list(minGeneSupport=minGeneSupport,maxCoreg=maxCoreg,minCoregSupport = minCoregSupport,searchThresh=searchThresh,nGRN=nGRN)
-    return(sigrns)'''
-    # if results.shape[0]==0 | results.shape[1] <3:
-    #     raise ValueError("Something went wrong. No GRN found.")
+    if results.shape[0]==0 | results.shape[1] <3:
+        raise ValueError("Something went wrong. No GRN found.")
 
-    # results.iloc[:, 0] = None
-
-    '''        FIN A ECLAIRCIR
-        sigrns = coregnet(result)
-    sigrns@inferenceParameters=list(minGeneSupport=minGeneSupport,maxCoreg=maxCoreg,minCoregSupport = minCoregSupport,searchThresh=searchThresh,nGRN=nGRN)
-        return(sigrns)'''
+    results.iloc[:, 0]=None
+    results.index=None
+    # sigrns=coregnet(results)
+    # sigrns@inferenceParameters=list(minGeneSupport=minGeneSupport,maxCoreg=maxCoreg,minCoregSupport = minCoregSupport,searchThresh=searchThresh,nGRN=nGRN)
+    # return sigrns
+    '''        FIN A ECLAIRCIR      '''
         

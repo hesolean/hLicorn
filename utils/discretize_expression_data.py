@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 
-def discretize_expression_data(numerical_expression, refSamples=None) :
+def discretize_expression_data(numerical_expression, ref_samples=None) :
     #########################################
     # take off all the NaN values
     numerical_expression[pd.isna(numerical_expression)]=0
@@ -12,8 +12,8 @@ def discretize_expression_data(numerical_expression, refSamples=None) :
     scaler=StandardScaler(with_mean=True, with_std=False)
 
     # if refSample exist, scaling according to refSample values else scaling according to every values
-    if refSamples != None :
-        scaler.fit(numerical_expression[refSamples])
+    if ref_samples != None :
+        scaler.fit(numerical_expression[ref_samples])
     else :
         scaler.fit(numerical_expression)
     scaled_data=scaler.transform(numerical_expression)

@@ -8,39 +8,47 @@ from sklearn.linear_model import LinearRegression
 from utils.eand import eand
 from utils.C_call import C_call
 
+# function that return new frequent itemsets according to the studied gene
+def support(items, test_df) :
+    print("support")
+    freq_items=pd.DataFrame()
+    supports=[]
+    for itemset in items.itemsets :
+        print("1")
+        freq=test_df.shape[0]
+        for item in itemset :
+            print("2")
+            sup=0
+            if item in test_df.columns :	sup = test_df[test_df[item] == True][item].count()
+            if sup<freq :	freq=sup
+        print(str(itemset), " : " , str(freq))
+        supports.append(freq / test_df.shape[0])
 
-def oneGeneHLICORN(g, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, search_thresh, gen_exp, nresult) :
-    print("oneGene")
+    freq_items["support"]=supports
+    freq_items["items"]=items.itemsets
+
+    return freq_items
+
+def oneGeneHLICORN(g, gene_disc_exp, reg_disc_exp, co_regs, trans_item_freq, trans_reg_bit_data, search_thresh, reg_num_exp, gene_num_exp, nresult) :
     shift=gene_disc_exp.shape[1]
 
     #sample index with the target gene at 1 or -1
     pos=np.where(gene_disc_exp.loc[g, :] == 1)[0]
     neg=np.where(gene_disc_exp.loc[g, :] == -1)[0] + shift
-
-    # function that return new frequent itemset according to the studied gene
-    def support(items, test_df) :
-        freq_items=pd.DataFrame()
-        supports=[]
-        for itemset in items.itemsets :
-            freq=test_df.shape[0]
-            for item in itemset :
-                sup=0
-                if item in test_df.columns :	sup = test_df[test_df[item] == True][item].count()
-                if sup<freq :	freq=sup
-            print(str(itemset), " : " , str(freq))
-            supports.append(freq / test_df.shape[0])
-
-        freq_items["support"]=supports
-        freq_items["items"]=items.itemsets
-	
-        return freq_items
-
+    print("pos", pos)
+    print("neg ", neg)
+    print("trans_reg_bit_data.iloc[:, pos + neg]", trans_reg_bit_data)
     # select all the coregulators with a support of 50% minimum only in the samples with the target gene at ones or minus ones
     # indices for which the threshold is reached, then we select the elements
-    co_act_fi=support(trans_reg_bit_data.iloc[:, pos + neg], g)
+    # co_act_fi=support(trans_item_freq, trans_reg_bit_data.iloc[:, pos + neg])
+    co_act_fi=support(trans_item_freq, trans_reg_bit_data.iloc[pos + neg, :])
+
     co_act=[item for item in co_regs if co_act_fi >= search_thresh]
-    co_rep_fi=support(trans_reg_bit_data.iloc[:, neg + pos], g)
+    # co_rep_fi=support(trans_item_freq, trans_reg_bit_data.iloc[:, neg + pos])
+    co_rep_fi=support(trans_item_freq, trans_reg_bit_data.iloc[neg + pos, :])
+
     co_rep=[item for item in co_regs if co_rep_fi >= search_thresh]
+    print("oneGene")
 
     # add empty coregulators to have the possibility to only have ativators or inhibitors
     co_rep.loc[len(co_rep)]=""
@@ -53,7 +61,6 @@ def oneGeneHLICORN(g, gene_disc_exp, reg_disc_exp, co_regs, trans_reg_bit_data, 
     co_rep=co_rep.drop_duplicates()
 
     # merge expression of coregulator and corepressor
-    # print(f"reg_disc_exp : {reg_disc_exp}")
     co_act_exp=eand(co_act, reg_disc_exp)
     co_rep_exp=eand(co_rep, reg_disc_exp)
     
