@@ -21,8 +21,9 @@ def support(items, test_df) :
             if sup<freq :	freq=sup
         # print(str(itemset), " : " , str(freq))
         supports.append(freq / test_df.shape[0])
+        # print("supports ", supports)
 
-    freq_items["support"]=supports
+    freq_items["supports"]=supports
     freq_items["items"]=items.itemsets
 
     return freq_items
@@ -48,32 +49,34 @@ def oneGeneHLICORN(g, gene_disc_exp, reg_disc_exp, co_regs, trans_item_freq, tra
     print("trans_reg_bit_data.iloc[:, pos + neg]", trans_reg_bit_data.loc[pos_columns_with_prefix + neg_columns_with_prefix, :])
     # select all the coregulators with a support of 50% minimum only in the samples with the target gene at ones or minus ones
     # indices for which the threshold is reached, then we select the elements
+    
     # co_act_fi=support(trans_item_freq, trans_reg_bit_data.iloc[:, pos + neg])
     co_act_fi=support(trans_item_freq, trans_reg_bit_data.loc[pos_columns_with_prefix + neg_columns_with_prefix, :])
 
-    co_act=[item for item in co_regs if co_act_fi >= search_thresh]
+    co_act = [item for item, support in zip(co_regs, co_act_fi.supports) if support >= search_thresh]
     # co_rep_fi=support(trans_item_freq, trans_reg_bit_data.iloc[:, neg + pos])
     co_rep_fi=support(trans_item_freq, trans_reg_bit_data.loc[neg_columns_with_prefix + pos_columns_with_prefix, :])
 
-    co_rep=[item for item in co_regs if co_rep_fi >= search_thresh]
-    print("oneGene")
-
-    # add empty coregulators to have the possibility to only have ativators or inhibitors
-    co_rep.loc[len(co_rep)]=""
-    co_act.loc[len(co_act)]=""
+    co_rep=[item for item, support in zip(co_regs, co_rep_fi.supports) if support >= search_thresh]
 
     # to have unique coregulators and a single vector of coreg (not a list)
-    co_act_names=sorted(set(co_act['itemsets'].split()))
-    co_rep_names=sorted(set(co_rep['itemsets'].split()))
-    co_act=co_act.drop_duplicates()
-    co_rep=co_rep.drop_duplicates()
+    # extraction of the names in each frozenset
+    co_act_names=sorted(list(set([item for sublist in co_act for item in sublist])))
+    co_rep_names=sorted(list(set([item for sublist in co_rep for item in sublist])))
+    print("co_act_names : ", co_act_names)
+
+    # add empty coregulators to have the possibility to only have ativators or inhibitors
+    co_rep.append("") # le format est-il bon ?
+    co_act.append("")
+    # print("co_act : ", co_act)
 
     # merge expression of coregulator and corepressor
     co_act_exp=eand(co_act, reg_disc_exp)
     co_rep_exp=eand(co_rep, reg_disc_exp)
     
     # active inhibitor has a stronger impact than naything else in licorn:
-    co_rep_exp.replace(1, 2, inplace=True)
+    co_rep_exp=co_rep_exp * 2
+    print("co_rep_exp : ", co_rep_exp)
 
     C_call(co_act_exp, co_act, co_rep_exp, co_rep, g, gene_disc_exp)
 

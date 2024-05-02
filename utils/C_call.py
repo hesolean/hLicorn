@@ -1,10 +1,11 @@
 
 import numpy as np
+import os
 import ctypes
-    
+
 def C_call(co_act_exp, co_act, co_rep_exp, co_rep, g, gene_disc_exp) :
     # Chargement la bibliothèque partagée contenant la fonction C, /!\ AJUSTER LE CHEMIN
-    lib=ctypes.CDLL("./library.so")
+    lib = ctypes.CDLL(os.path.abspath("./utils/comblicorn.c"))
 
     # definition of argument types for the C function
     lib.combnLicorn.argtypes=[

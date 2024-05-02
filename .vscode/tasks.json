@@ -1,0 +1,20 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build comblicorn",
+            "type": "shell",
+            "command": "gcc",
+            "args": [
+                "-shared",
+                "-o",
+                "comblicorn.dll",
+                "comblicorn.c"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
