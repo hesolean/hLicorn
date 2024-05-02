@@ -14,14 +14,12 @@ def support(items, test_df) :
     freq_items=pd.DataFrame()
     supports=[]
     for itemset in items.itemsets :
-        print("1")
         freq=test_df.shape[0]
         for item in itemset :
-            print("2")
             sup=0
             if item in test_df.columns :	sup = test_df[test_df[item] == True][item].count()
             if sup<freq :	freq=sup
-        print(str(itemset), " : " , str(freq))
+        # print(str(itemset), " : " , str(freq))
         supports.append(freq / test_df.shape[0])
 
     freq_items["support"]=supports
@@ -33,19 +31,29 @@ def oneGeneHLICORN(g, gene_disc_exp, reg_disc_exp, co_regs, trans_item_freq, tra
     shift=gene_disc_exp.shape[1]
 
     #sample index with the target gene at 1 or -1
-    pos=np.where(gene_disc_exp.loc[g, :] == 1)[0]
-    neg=np.where(gene_disc_exp.loc[g, :] == -1)[0] + shift
-    print("pos", pos)
-    print("neg ", neg)
-    print("trans_reg_bit_data.iloc[:, pos + neg]", trans_reg_bit_data)
+    # pos=np.where(gene_disc_exp.loc[g, :] == 1)[0]
+    # neg=np.where(gene_disc_exp.loc[g, :] == -1)[0] + shift
+
+    '''alternative avec les noms de colonne'''
+    # Récupérer les noms des colonnes correspondant aux valeurs 1 dans gene_disc_exp
+    pos_columns = gene_disc_exp.columns[gene_disc_exp.loc[g] == 1]
+    neg_columns=gene_disc_exp.columns[gene_disc_exp.loc[g] == 1]
+
+    # Ajouter "pos_" devant chaque nom de colonne
+    pos_columns_with_prefix = [f"pos_{col}" for col in pos_columns]
+    neg_columns_with_prefix=[f"neg_{col}" for col in neg_columns]
+
+    print("pos", pos_columns_with_prefix)
+    print("neg ", neg_columns_with_prefix)
+    print("trans_reg_bit_data.iloc[:, pos + neg]", trans_reg_bit_data.loc[pos_columns_with_prefix + neg_columns_with_prefix, :])
     # select all the coregulators with a support of 50% minimum only in the samples with the target gene at ones or minus ones
     # indices for which the threshold is reached, then we select the elements
     # co_act_fi=support(trans_item_freq, trans_reg_bit_data.iloc[:, pos + neg])
-    co_act_fi=support(trans_item_freq, trans_reg_bit_data.iloc[pos + neg, :])
+    co_act_fi=support(trans_item_freq, trans_reg_bit_data.loc[pos_columns_with_prefix + neg_columns_with_prefix, :])
 
     co_act=[item for item in co_regs if co_act_fi >= search_thresh]
     # co_rep_fi=support(trans_item_freq, trans_reg_bit_data.iloc[:, neg + pos])
-    co_rep_fi=support(trans_item_freq, trans_reg_bit_data.iloc[neg + pos, :])
+    co_rep_fi=support(trans_item_freq, trans_reg_bit_data.loc[neg_columns_with_prefix + pos_columns_with_prefix, :])
 
     co_rep=[item for item in co_regs if co_rep_fi >= search_thresh]
     print("oneGene")
