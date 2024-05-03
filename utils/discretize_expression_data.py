@@ -4,14 +4,13 @@ from sklearn.preprocessing import StandardScaler
 
 
 def discretize_expression_data(numerical_expression, ref_samples=None) :
-    #########################################
     # take off all the NaN values
     numerical_expression[pd.isna(numerical_expression)]=0
 
     # create object before scaling
     scaler=StandardScaler(with_mean=True, with_std=False)
 
-    # if refSample exist, scaling according to refSample values else scaling according to every values
+    # if ref_sample exist, scaling according to ref_sample values else scaling according to every values
     if ref_samples != None :
         scaler.fit(numerical_expression[ref_samples])
     else :
